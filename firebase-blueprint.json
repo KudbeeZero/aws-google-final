@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and tracking information",
+      "type": "object",
+      "properties": {
+        "totalStudyMinutes": { "type": "number" },
+        "todayStudyMinutes": { "type": "number" },
+        "dailyStudyGoal": { "type": "number" },
+        "dailyMinutesLog": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Flashcard": {
+      "title": "Flashcard",
+      "description": "A flashcard item for the user",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["known", "review", "new"] },
+        "lastReviewedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "InterviewSession": {
+      "title": "InterviewSession",
+      "description": "A saved interview transcript",
+      "type": "object",
+      "properties": {
+        "scenarioId": { "type": "string" },
+        "transcript": { "type": "string", "maxLength": 100000 },
+        "scorecard": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}/profile/data": {
+      "schema": "UserProfile",
+      "description": "The user's progress and profile data"
+    },
+    "/users/{userId}/flashcards/{cardId}": {
+      "schema": "Flashcard",
+      "description": "User specific flashcard state"
+    },
+    "/users/{userId}/interviewSessions/{sessionId}": {
+      "schema": "InterviewSession",
+      "description": "Saved interview transcripts"
+    }
+  }
+}

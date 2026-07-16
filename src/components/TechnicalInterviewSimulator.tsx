@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { GoogleGenAI } from "@google/genai";
 import { 
   Briefcase, 
   Video, 
@@ -19,8 +20,12 @@ import {
   VideoOff,
   Mic,
   Plus,
-  Play
+  Play,
+  Save,
+  Loader2,
+  HelpCircle
 } from "lucide-react";
+import { auth, saveInterviewSessionToCloud } from "../lib/firebase";
 
 interface Interviewer {
   id: string;
@@ -232,6 +237,9 @@ export const TechnicalInterviewSimulator: React.FC = () => {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
   const [scorecard, setScorecard] = useState<ScorecardResult | null>(null);
+  const [showHints, setShowHints] = useState<boolean>(false);
+  const [isSavingSession, setIsSavingSession] = useState<boolean>(false);
+  const [sessionSaved, setSessionSaved] = useState<boolean>(false);
 
   // Roadmap State persistence via localStorage
   const [roadmapItems, setRoadmapItems] = useState(() => {
@@ -243,6 +251,25 @@ export const TechnicalInterviewSimulator: React.FC = () => {
     localStorage.setItem("aws_roadmap_items_v1", JSON.stringify(roadmapItems));
   }, [roadmapItems]);
 
+  const handleSaveSession = async () => {
+    if (!auth.currentUser || !scorecard) return;
+    setIsSavingSession(true);
+    try {
+      const sessionId = `session-${Date.now()}`;
+      await saveInterviewSessionToCloud(auth.currentUser.uid, sessionId, {
+        scenarioId: selectedScenario.id,
+        transcript: userResponse,
+        scorecard,
+        createdAt: new Date().toISOString()
+      });
+      setSessionSaved(true);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSavingSession(false);
+    }
+  };
+
   const toggleRoadmapItem = (id: string) => {
     setRoadmapItems((prev: any[]) =>
       prev.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
@@ -253,6 +280,8 @@ export const TechnicalInterviewSimulator: React.FC = () => {
     setUserResponse("");
     setHasSubmitted(false);
     setScorecard(null);
+    setShowHints(false);
+    setSessionSaved(false);
   };
 
   const handleSuggestPhrase = (phrase: string) => {
@@ -279,13 +308,81 @@ export const TechnicalInterviewSimulator: React.FC = () => {
     }, 1500);
   };
 
+  const [isEvaluating, setIsEvaluating] = useState(false);
+
   // Hone-style keyword matching and scorecard evaluation engine
-  const handleEvaluateResponse = () => {
+  const handleEvaluateResponse = async () => {
     if (!userResponse.trim()) {
       alert("Please enter a response first.");
       return;
     }
 
+    const apiKey = localStorage.getItem("aws_professor_api_key");
+    if (!apiKey) {
+      alert("Please configure your Gemini API Key in the Interactive Professor tab to unlock AI-powered interview grading. Using fallback matching logic for now.");
+      fallbackEvaluateResponse();
+      return;
+    }
+
+    setIsEvaluating(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      
+      const prompt = `You are an expert AWS technical interviewer: ${selectedInterviewer.name}, a ${selectedInterviewer.role}.
+Tone: ${selectedInterviewer.tone}
+Scenario: ${selectedScenario.question}
+Expected Keywords: ${selectedScenario.requiredKeywords.join(", ")}
+
+User Response:
+"${userResponse}"
+
+Evaluate the user's response to the scenario. Provide deep Socratic architectural analysis. Grade them strictly on AWS architecture correctness, security, best practices, and communication.
+`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-pro",
+        contents: prompt,
+        config: {
+          systemInstruction: "You are an elite, strict AWS solutions architect evaluating a candidate. Be extremely precise and provide deep Socratic architectural analysis rather than generic responses. Output strictly as JSON.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              matchPercent: { type: "integer", description: "Overall score out of 100" },
+              grade: { type: "string", enum: ["Exemplary", "Proficient", "Developing", "Needs Review"] },
+              foundKeywords: { type: "array", items: { type: "string" } },
+              missingKeywords: { type: "array", items: { type: "string" } },
+              interviewerFeedback: { type: "string", description: "Deep Socratic architectural analysis and feedback from the interviewer persona" },
+              rubricScores: {
+                type: "object",
+                properties: {
+                  accuracy: { type: "integer" },
+                  communication: { type: "integer" },
+                  bestPractices: { type: "integer" },
+                  businessValue: { type: "integer" }
+                },
+                required: ["accuracy", "communication", "bestPractices", "businessValue"]
+              }
+            },
+            required: ["matchPercent", "grade", "foundKeywords", "missingKeywords", "interviewerFeedback", "rubricScores"]
+          }
+        }
+      });
+
+      const text = response.text || "";
+      const result = JSON.parse(text) as ScorecardResult;
+      setScorecard(result);
+      setHasSubmitted(true);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to reach Gemini API. Using fallback grading.");
+      fallbackEvaluateResponse();
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+
+  const fallbackEvaluateResponse = () => {
     const responseLower = userResponse.toLowerCase();
     const foundKeywords = selectedScenario.requiredKeywords.filter((kw) =>
       responseLower.includes(kw.toLowerCase())
@@ -504,25 +601,74 @@ export const TechnicalInterviewSimulator: React.FC = () => {
                 </div>
               </div>
 
+              {/* Hints Feature Section */}
+              {!hasSubmitted && (
+                <div className="pt-2">
+                  <button
+                    onClick={() => setShowHints(!showHints)}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    {showHints ? "Hide Guidance Hints" : "Need a Hint?"}
+                  </button>
+                  
+                  {showHints && (
+                    <div className="mt-3 p-4 bg-blue-50/50 border border-blue-100 rounded-sm space-y-2 animate-fade-in">
+                      <span className="text-[10px] uppercase font-black text-blue-800 tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-blue-600" />
+                        Architectural Hints
+                      </span>
+                      <ul className="space-y-1.5 pl-1">
+                        {selectedScenario.helperTips.map((tip, idx) => (
+                          <li key={idx} className="text-xs text-blue-900 flex gap-2">
+                            <span className="text-blue-500 font-bold mt-0.5">•</span>
+                            <span className="leading-snug">{tip}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Action Trigger Row */}
-              <div className="flex justify-end pt-2 border-t border-slate-100">
+              <div className="flex justify-end pt-2 border-t border-slate-100 gap-3">
                 {!hasSubmitted ? (
                   <button
                     onClick={handleEvaluateResponse}
-                    disabled={!userResponse.trim()}
+                    disabled={!userResponse.trim() || isEvaluating}
                     className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    Submit Response for Assessment
-                    <ArrowRight className="w-4 h-4" />
+                    {isEvaluating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Evaluating...
+                      </>
+                    ) : (
+                      <>
+                        Submit Response for Assessment
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
                 ) : (
-                  <button
-                    onClick={resetInterviewState}
-                    className="px-5 py-2.5 bg-[#FF9900] hover:bg-amber-600 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    Retry Active Scenario
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button
+                      onClick={handleSaveSession}
+                      disabled={isSavingSession || sessionSaved}
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      {isSavingSession ? "Saving..." : sessionSaved ? "Saved!" : "Save Session"}
+                    </button>
+                    <button
+                      onClick={resetInterviewState}
+                      className="px-5 py-2.5 bg-[#FF9900] hover:bg-amber-600 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      Retry Active Scenario
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </>
                 )}
               </div>
             </div>

@@ -1,9 +1,11 @@
-import React from "react";
-import { Award, CheckCircle, Flame, ShieldAlert, Sparkles, BookOpen, Layers, Trophy, AlertTriangle, TrendingUp, ShieldCheck, Bot, HelpCircle, Zap, Lock, Cloud, CloudLightning, Key, UserCheck, RefreshCw } from "lucide-react";
+import React, { useMemo } from "react";
+import { Award, CheckCircle, Flame, ShieldAlert, Sparkles, BookOpen, Layers, Trophy, AlertTriangle, TrendingUp, ShieldCheck, Bot, HelpCircle, Zap, Lock, Cloud, CloudLightning, Key, UserCheck, RefreshCw, Volume2, VolumeX } from "lucide-react";
 import { DomainData, Flashcard, Achievement } from "../types";
 import { FirstTimeTools } from "./FirstTimeTools";
 import { FocusBuddy } from "./FocusBuddy";
 import { DailyGoalTracker } from "./DailyGoalTracker";
+import { WeeklyStudyChart } from "./WeeklyStudyChart";
+import { MonthlyHeatmap } from "./MonthlyHeatmap";
 import { loginWithGoogle, loginAnonymously, logoutUser } from "../lib/firebase";
 
 const AchievementIcon: React.FC<{ name: string; unlocked: boolean }> = ({ name, unlocked }) => {
@@ -38,6 +40,7 @@ interface DashboardViewProps {
   user?: any;
   authLoading?: boolean;
   syncing?: boolean;
+  dailyMinutesLog?: { [dateKey: string]: number };
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -57,6 +60,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   user,
   authLoading,
   syncing,
+  dailyMinutesLog,
 }) => {
   // Calculate statistics
   const totalCards = flashcards.length;
@@ -124,6 +128,79 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // State for Achievements filtering
   const [categoryFilter, setCategoryFilter] = React.useState<"all" | "study" | "mastery" | "quiz" | "chat">("all");
   const [authError, setAuthError] = React.useState<string | null>(null);
+
+  // Streak calculation
+  const streak = useMemo(() => {
+    if (!dailyMinutesLog) return 0;
+    let currentStreak = 0;
+    let isStreakBroken = false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0];
+      
+      const mins = dailyMinutesLog[dateStr] || 0;
+      const metGoal = mins >= dailyStudyGoal && dailyStudyGoal > 0;
+      
+      if (i === 0) {
+        if (metGoal) currentStreak++;
+      } else {
+        if (metGoal && !isStreakBroken) {
+          currentStreak++;
+        } else if (!metGoal) {
+          isStreakBroken = true;
+        }
+      }
+    }
+    return currentStreak;
+  }, [dailyMinutesLog, dailyStudyGoal]);
+
+  const [isPlayingVoice, setIsPlayingVoice] = React.useState(false);
+
+  const handlePlayVoiceSummary = () => {
+    if (!('speechSynthesis' in window)) {
+      alert("Text-to-speech is not supported in this browser.");
+      return;
+    }
+    
+    if (isPlayingVoice) {
+      window.speechSynthesis.cancel();
+      setIsPlayingVoice(false);
+      return;
+    }
+
+    const textParts = [];
+    if (streak > 0) {
+      textParts.push(`Great job! You are currently on a ${streak} day study streak.`);
+    } else {
+      textParts.push(`Welcome back. Let's build a new study streak today.`);
+    }
+
+    if (strongestDomain) {
+      textParts.push(`Your strongest area is ${strongestDomain.name}, with a mastery of ${strongestDomain.progress} percent.`);
+    }
+
+    if (weakestDomain) {
+      textParts.push(`Your primary knowledge gap is ${weakestDomain.name}, sitting at ${weakestDomain.progress} percent. I recommend you focus on this to boost your exam readiness.`);
+    } else {
+      textParts.push(`You have mastered all domains. You are exam ready!`);
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textParts.join(" "));
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+    const preferredVoice = englishVoices.find(v => v.name.includes('Google') || v.name.includes('Premium') || v.name.includes('Natural')) || englishVoices[0];
+    if (preferredVoice) utterance.voice = preferredVoice;
+    
+    utterance.onstart = () => setIsPlayingVoice(true);
+    utterance.onend = () => setIsPlayingVoice(false);
+    utterance.onerror = () => setIsPlayingVoice(false);
+    
+    window.speechSynthesis.speak(utterance);
+  };
 
   // Dynamically parse Socratic Professor chat counts
   const chatHistoryRaw = localStorage.getItem("aws_professor_chat_history_v1");
@@ -504,6 +581,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         onResetStudyMinutes={onResetStudyMinutes}
       />
 
+      {/* Weekly Study Progress Line Chart */}
+      <WeeklyStudyChart 
+        todayStudyMinutes={todayStudyMinutes} 
+        dailyMinutesLog={dailyMinutesLog} 
+        dailyStudyGoal={dailyStudyGoal} 
+      />
+
+      {/* Monthly Heatmap View */}
+      <MonthlyHeatmap
+        dailyMinutesLog={dailyMinutesLog}
+        dailyStudyGoal={dailyStudyGoal}
+      />
+
       {/* Dynamic Diagnostic Health Check Card */}
       {(strongestDomain || weakestDomain) ? (
         <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-6 space-y-4">
@@ -514,9 +604,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 AI Study Diagnostics & Weakness Analysis
               </h3>
             </div>
-            <span className="text-[9px] uppercase font-mono font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">
-              Real-time Insights
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePlayVoiceSummary}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-colors border ${
+                  isPlayingVoice 
+                    ? "bg-blue-50 text-blue-600 border-blue-200 animate-pulse" 
+                    : "bg-white hover:bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-700"
+                }`}
+                title="Play Audio Summary"
+              >
+                {isPlayingVoice ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                {isPlayingVoice ? "Stop Audio" : "Voice Summary"}
+              </button>
+              <span className="text-[9px] uppercase font-mono font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">
+                Real-time Insights
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

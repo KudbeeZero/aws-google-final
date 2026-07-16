@@ -70,11 +70,12 @@ export interface CloudProgress {
   dailyStudyGoal: number;
   studyHistory: { [key: string]: "known" | "review" | null };
   quizHistory: any;
+  dailyMinutesLog?: { [dateKey: string]: number };
 }
 
 export const saveProgressToCloud = async (userId: string, progress: CloudProgress) => {
   try {
-    const userDocRef = doc(db, "users", userId);
+    const userDocRef = doc(db, "users", userId, "profile", "data");
     await setDoc(userDocRef, {
       ...progress,
       updatedAt: new Date().toISOString()
@@ -86,7 +87,7 @@ export const saveProgressToCloud = async (userId: string, progress: CloudProgres
 
 export const getProgressFromCloud = async (userId: string): Promise<CloudProgress | null> => {
   try {
-    const userDocRef = doc(db, "users", userId);
+    const userDocRef = doc(db, "users", userId, "profile", "data");
     const docSnap = await getDoc(userDocRef);
     if (docSnap.exists()) {
       const data = docSnap.data();
@@ -95,12 +96,29 @@ export const getProgressFromCloud = async (userId: string): Promise<CloudProgres
         todayStudyMinutes: data.todayStudyMinutes || 0,
         dailyStudyGoal: data.dailyStudyGoal || 15,
         studyHistory: data.studyHistory || {},
-        quizHistory: data.quizHistory || {}
+        quizHistory: data.quizHistory || {},
+        dailyMinutesLog: data.dailyMinutesLog || undefined
       };
     }
     return null;
   } catch (error) {
     console.error("Failed to fetch progress from cloud:", error);
     return null;
+  }
+};
+
+export interface InterviewSessionData {
+  scenarioId: string;
+  transcript: string;
+  scorecard: any;
+  createdAt: string;
+}
+
+export const saveInterviewSessionToCloud = async (userId: string, sessionId: string, sessionData: InterviewSessionData) => {
+  try {
+    const sessionDocRef = doc(db, "users", userId, "interviewSessions", sessionId);
+    await setDoc(sessionDocRef, sessionData);
+  } catch (error) {
+    console.error("Failed to save interview session to cloud:", error);
   }
 };

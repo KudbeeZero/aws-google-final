@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { GoogleGenAI } from "@google/genai";
+import Markdown from "react-markdown";
 import { 
   Bot, 
   Send, 
@@ -12,7 +13,10 @@ import {
   ArrowRight,
   Flame,
   HelpCircle,
-  GraduationCap
+  GraduationCap,
+  Copy,
+  Download,
+  Check
 } from "lucide-react";
 
 interface ChatMessage {
@@ -35,11 +39,10 @@ interface InteractiveProfessorProps {
 const SYSTEM_INSTRUCTION = `You are 'Professor Cloud'—an elite AWS Solutions Architect and an encouraging, interactive Socratic mentor.
 
 Socratic Pedagogy Rules:
-1. Always begin your technical explanation with a clear, relatable real-world analogy first (for example, comparing Security Groups to instance-level hotel room security guards, and NACLs to subnet-level border checkpoint gates).
-2. Never just dump flat definition lists or dry data tables. Engage the user's critical thinking.
-3. Socratic dialogue: Keep explanations punchy and prompt-driven. Ask guiding questions.
-4. Distractor Alert: Explicitly call out typical keyword pitfalls, vocabulary traps, or misleading options common to the AWS Certified Cloud Practitioner (CLF-C02) exam paper.
-5. Active Checkpoints: Always end your response with a brief, high-yield multiple-choice concept check or scenario riddle to verify user retention.
+1. Deep Socratic Architectural Analysis: Always dive deep into architectural trade-offs, security, cost optimization, and performance instead of giving generic surface-level responses. Ask probing Socratic questions that force the student to justify their architectural choices.
+2. Relatable Context: Begin technical explanations with clear, relatable real-world analogies (e.g., comparing Security Groups to instance-level hotel room security guards, and NACLs to subnet-level border checkpoint gates).
+3. Distractor Alert: Explicitly call out typical keyword pitfalls, vocabulary traps, or misleading options common to the AWS Certified Cloud Practitioner (CLF-C02) exam paper.
+4. Active Checkpoints: Always end your response with a brief, high-yield multiple-choice concept check or scenario riddle to verify user retention.
 
 Active Checkpoint Formatting Rules (MANDATORY):
 - Provide exactly 4 options labeled A), B), C), and D). Place each option on a new line.
@@ -159,6 +162,17 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
     }
   };
 
+  const handleExportChat = () => {
+    const textToSave = messages.map(m => `[${m.role.toUpperCase()}]\n${m.text}`).join('\n\n---\n\n');
+    const blob = new Blob([textToSave], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `professor-cloud-notes-${new Date().toISOString().split("T")[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Send message to Gemini
   const handleSendMessage = async (textToSend: string) => {
     if (!textToSend.trim() || isLoading) return;
@@ -195,9 +209,9 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
         parts: [{ text: msg.text }]
       }));
 
-      // Call Gemini 2.5 Flash as requested by user
+      // Call Gemini 1.5 Pro as requested by user
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-1.5-pro",
         contents,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
@@ -291,14 +305,24 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
         {/* Header Controls */}
         <div className="flex items-center gap-2">
           {apiKey ? (
-            <button
-              onClick={handleClearApiKey}
-              className="text-slate-400 hover:text-rose-400 text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
-              title="Change Gemini API Key"
-            >
-              <Key className="w-3 h-3" />
-              Reset Key
-            </button>
+            <>
+              <button
+                onClick={handleExportChat}
+                className="text-slate-400 hover:text-[#FF9900] text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
+                title="Export Chat History"
+              >
+                <Download className="w-3 h-3" />
+                Save Notes
+              </button>
+              <button
+                onClick={handleClearApiKey}
+                className="text-slate-400 hover:text-rose-400 text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
+                title="Change Gemini API Key"
+              >
+                <Key className="w-3 h-3" />
+                Reset Key
+              </button>
+            </>
           ) : (
             <button
               onClick={() => setIsKeySetupOpen(true)}
@@ -403,14 +427,31 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
                   </div>
 
                   {/* Bubble Content */}
-                  <div className="space-y-3">
-                    <div className={`p-3.5 rounded-sm shadow-sm border text-xs leading-relaxed whitespace-pre-wrap ${
+                  <div className="space-y-3 relative group">
+                    <div className={`p-3.5 rounded-sm shadow-sm border text-xs leading-relaxed overflow-hidden ${
                       msg.role === "user"
                         ? "bg-slate-900 border-slate-800 text-white rounded-tr-none"
-                        : "bg-white border-slate-200 text-slate-800 rounded-tl-none"
+                        : "bg-white border-slate-200 text-slate-800 rounded-tl-none prose prose-sm prose-slate max-w-none"
                     }`}>
-                      {msg.text}
+                      {msg.role === "user" ? (
+                        <span className="whitespace-pre-wrap">{msg.text}</span>
+                      ) : (
+                        <div className="markdown-body">
+                          <Markdown>{msg.text}</Markdown>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Copy Button for Model responses */}
+                    {msg.role === "model" && (
+                      <button
+                        onClick={() => navigator.clipboard.writeText(msg.text)}
+                        className="absolute -top-2.5 -right-2.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-slate-200 text-slate-500 hover:text-[#FF9900] p-1.5 rounded-sm shadow-sm cursor-pointer"
+                        title="Copy to clipboard"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    )}
 
                     {/* INTERACTIVE QUIZ CARD (Parsed checkpoint) */}
                     {msg.role === "model" && msg.hasQuiz && msg.quizOptions && msg.quizOptions.length > 0 && (
@@ -503,18 +544,18 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
             ))}
 
             {isLoading && (
-              <div className="flex justify-start animate-pulse">
+              <div className="flex justify-start animate-fade-in">
                 <div className="flex gap-3 max-w-[80%]">
                   <div className="w-8 h-8 rounded-sm flex items-center justify-center bg-[#FF9900]/10 border border-[#FF9900]/20 text-[#FF9900] shrink-0">
-                    <Bot className="w-4 h-4 text-[#FF9900]" />
+                    <Bot className="w-4 h-4 text-[#FF9900] animate-pulse" />
                   </div>
-                  <div className="bg-slate-100 border border-slate-200 text-slate-500 p-3.5 rounded-sm text-xs rounded-tl-none space-y-1">
-                    <div className="font-bold text-slate-700 flex items-center gap-1.5">
-                      Professor Cloud is composing...
+                  <div className="bg-white border border-slate-200 text-slate-500 p-3.5 rounded-sm text-xs rounded-tl-none flex items-center gap-2 shadow-sm">
+                    <span className="font-bold text-slate-700">Professor Cloud is typing</span>
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
-                    <div className="h-1.5 w-32 bg-slate-200 rounded animate-pulse mt-2" />
-                    <div className="h-1.5 w-48 bg-slate-200 rounded animate-pulse" />
-                    <div className="h-1.5 w-24 bg-slate-200 rounded animate-pulse" />
                   </div>
                 </div>
               </div>
@@ -529,7 +570,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
                   </h4>
                   <p className="leading-relaxed font-semibold text-rose-700">{apiError}</p>
                   <p className="mt-2 text-[11px] text-slate-500 leading-normal">
-                    Tip: Verify your key is active and supports standard Gemini 2.5 Flash queries. Click the "Reset Key" button in the upper right header to change it.
+                    Tip: Verify your key is active and supports standard Gemini 1.5 Pro queries. Click the "Reset Key" button in the upper right header to change it.
                   </p>
                 </div>
               </div>
@@ -606,7 +647,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
                 <Flame className="w-3 h-3 text-[#FF9900]" />
                 Interactive responses add +2m study time
               </span>
-              <span>Model: gemini-2.5-flash</span>
+              <span>Model: gemini-1.5-pro</span>
             </div>
 
           </div>
