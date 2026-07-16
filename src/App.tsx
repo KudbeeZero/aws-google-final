@@ -62,6 +62,15 @@ export default function App() {
   });
   const [selectedDomainForFlashcards, setSelectedDomainForFlashcards] = useState<string>("all");
 
+  const [aiModelMode, setAiModelMode] = useState<"fast" | "expert">(() => {
+    const saved = localStorage.getItem("aws_ai_model_mode_v1");
+    return (saved as "fast" | "expert") || "expert";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("aws_ai_model_mode_v1", aiModelMode);
+  }, [aiModelMode]);
+
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("aws_study_dark_mode_v1");
@@ -111,6 +120,7 @@ export default function App() {
         
         unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
           setSyncing(false);
+          setHasLoadedCloudData(true);
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.totalStudyMinutes !== undefined) setTotalStudyMinutes(data.totalStudyMinutes);
@@ -119,13 +129,25 @@ export default function App() {
             if (data.studyHistory !== undefined) setStudyHistory(data.studyHistory);
             if (data.quizHistory !== undefined) setQuizHistory(data.quizHistory);
             if (data.dailyMinutesLog !== undefined) setDailyMinutesLog(data.dailyMinutesLog);
+          } else {
+            // Seed initial mock data if no document exists
+            const log: { [dateKey: string]: number } = {};
+            for (let i = 6; i > 0; i--) {
+              const d = new Date();
+              d.setDate(d.getDate() - i);
+              const key = d.toISOString().split('T')[0];
+              log[key] = Math.floor(Math.random() * 25) + 15;
+            }
+            setDailyMinutesLog(log);
           }
         }, (error) => {
           console.error("Firebase onSnapshot error:", error);
           setSyncing(false);
+          setHasLoadedCloudData(true); // Treat error as loaded to allow local interaction if needed
         });
       } else {
         setUser(null);
+        setHasLoadedCloudData(true);
         if (unsubscribeSnapshot) unsubscribeSnapshot();
       }
       setAuthLoading(false);
@@ -160,49 +182,20 @@ export default function App() {
     }
   };
 
-  // Local state persistence for study session
-  const [studyHistory, setStudyHistory] = useState<{ [key: string]: "known" | "review" | null }>(() => {
-    const saved = localStorage.getItem("aws_study_history_v1");
-    return saved ? JSON.parse(saved) : {};
-  });
-
-  const [quizHistory, setQuizHistory] = useState<{ [key: string]: boolean }>(() => {
-    const saved = localStorage.getItem("aws_quiz_history_v1");
-    return saved ? JSON.parse(saved) : {};
-  });
-
-  const [dailyStudyGoal, setDailyStudyGoal] = useState<number>(() => {
-    const saved = localStorage.getItem("aws_daily_study_goal_v1");
-    return saved ? parseInt(saved, 10) : 30;
-  });
-
-  const [todayStudyMinutes, setTodayStudyMinutes] = useState<number>(() => {
-    const saved = localStorage.getItem("aws_today_study_minutes_v1");
-    return saved ? parseInt(saved, 10) : 0;
-  });
-
-  const [totalStudyMinutes, setTotalStudyMinutes] = useState<number>(() => {
-    const saved = localStorage.getItem("aws_total_study_minutes_v1");
-    return saved ? parseInt(saved, 10) : 0;
-  });
-
-  const [dailyMinutesLog, setDailyMinutesLog] = useState<{ [dateKey: string]: number }>(() => {
-    const saved = localStorage.getItem("aws_daily_minutes_log_v1");
-    if (saved) return JSON.parse(saved);
-    // Seed initial mock data for the previous 6 days so the chart looks populated and beautiful!
-    const log: { [dateKey: string]: number } = {};
-    for (let i = 6; i > 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      // Seed with realistic study times (e.g. 15, 20, 35, 10, 25, 40)
-      log[key] = Math.floor(Math.random() * 25) + 15;
-    }
-    return log;
-  });
+  // Cloud-first state (no localStorage for data)
+  const [studyHistory, setStudyHistory] = useState<{ [key: string]: "known" | "review" | null }>({});
+  const [quizHistory, setQuizHistory] = useState<{ [key: string]: boolean }>({});
+  const [dailyStudyGoal, setDailyStudyGoal] = useState<number>(30);
+  const [todayStudyMinutes, setTodayStudyMinutes] = useState<number>(0);
+  const [totalStudyMinutes, setTotalStudyMinutes] = useState<number>(0);
+  const [dailyMinutesLog, setDailyMinutesLog] = useState<{ [dateKey: string]: number }>({});
+  
+  // Flag to prevent overwriting cloud state with empty local state on first load
+  const [hasLoadedCloudData, setHasLoadedCloudData] = useState<boolean>(false);
 
   // Sync today's study minutes with the daily log
   useEffect(() => {
+    if (!hasLoadedCloudData) return;
     const todayKey = new Date().toISOString().split('T')[0];
     if (dailyMinutesLog[todayKey] !== todayStudyMinutes) {
       setDailyMinutesLog((prev) => ({
@@ -210,12 +203,7 @@ export default function App() {
         [todayKey]: todayStudyMinutes,
       }));
     }
-  }, [todayStudyMinutes]);
-
-  // Persist dailyMinutesLog to localStorage
-  useEffect(() => {
-    localStorage.setItem("aws_daily_minutes_log_v1", JSON.stringify(dailyMinutesLog));
-  }, [dailyMinutesLog]);
+  }, [todayStudyMinutes, hasLoadedCloudData]);
 
   // Action to download standalone offline companion
   const handleDownloadOfflineCompanion = () => {
@@ -235,30 +223,9 @@ export default function App() {
     }
   };
 
-  // Save states to localStorage
-  useEffect(() => {
-    localStorage.setItem("aws_study_history_v1", JSON.stringify(studyHistory));
-  }, [studyHistory]);
-
-  useEffect(() => {
-    localStorage.setItem("aws_quiz_history_v1", JSON.stringify(quizHistory));
-  }, [quizHistory]);
-
-  useEffect(() => {
-    localStorage.setItem("aws_daily_study_goal_v1", dailyStudyGoal.toString());
-  }, [dailyStudyGoal]);
-
-  useEffect(() => {
-    localStorage.setItem("aws_today_study_minutes_v1", todayStudyMinutes.toString());
-  }, [todayStudyMinutes]);
-
-  useEffect(() => {
-    localStorage.setItem("aws_total_study_minutes_v1", totalStudyMinutes.toString());
-  }, [totalStudyMinutes]);
-
   // Auto-save changes to cloud when state changes (debounced)
   useEffect(() => {
-    if (user) {
+    if (user && hasLoadedCloudData) {
       const delaySave = setTimeout(async () => {
         setSyncing(true);
         await saveProgressToCloud(user.uid, {
@@ -273,7 +240,7 @@ export default function App() {
       }, 1000); // Debounce to avoid overloading write rate
       return () => clearTimeout(delaySave);
     }
-  }, [user, totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog]);
+  }, [user, hasLoadedCloudData, totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog]);
 
   // Handle daily study goal metrics
   const handleUpdateDailyGoal = (mins: number) => {
@@ -659,28 +626,63 @@ export default function App() {
             )}
           </div>
 
-          {/* Persistent Theme Switcher */}
-          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/20 dark:bg-slate-950/10 shrink-0">
-            <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-              Theme Control
-            </span>
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs"
-              title={darkMode ? "Banish the shadows, switch to Light Mode" : "Rest your eyes, switch to Dark Mode"}
-            >
-              {darkMode ? (
-                <>
-                  <Sun className="w-3.5 h-3.5 text-amber-500 fill-amber-500 animate-spin-slow" />
-                  <span className="text-amber-500">Light</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500" />
-                  <span className="text-slate-500">Dark</span>
-                </>
-              )}
-            </button>
+          {/* Theme Control and AI Settings */}
+          <div className="flex flex-col border-t border-slate-100 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/10 shrink-0">
+            {/* AI Model Intelligence Toggle */}
+            <div className="px-4 py-3 flex flex-col gap-2 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                Intelligence Engine
+                {aiModelMode === "expert" ? <Sparkles className="w-3 h-3 text-emerald-500" /> : <Zap className="w-3 h-3 text-[#FF9900]" />}
+              </span>
+              <div className="flex bg-slate-200 dark:bg-slate-800 p-0.5 rounded-sm">
+                <button
+                  onClick={() => setAiModelMode("fast")}
+                  className={`flex-1 py-1.5 text-[10px] font-bold tracking-wider rounded-xs uppercase transition-all ${
+                    aiModelMode === "fast" 
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" 
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                  }`}
+                >
+                  Fast Mode
+                </button>
+                <button
+                  onClick={() => setAiModelMode("expert")}
+                  className={`flex-1 py-1.5 text-[10px] font-bold tracking-wider rounded-xs uppercase transition-all ${
+                    aiModelMode === "expert" 
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" 
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                  }`}
+                >
+                  Expert Mode
+                </button>
+              </div>
+              <p className="text-[9px] text-slate-400 leading-tight">
+                {aiModelMode === "fast" ? "gemini-3.5-flash: Optimized for speed and quick recall." : "gemini-3.1-pro: Advanced reasoning for complex scenarios."}
+              </p>
+            </div>
+            {/* Theme Toggle */}
+            <div className="px-4 py-3 flex items-center justify-between">
+              <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                Theme Control
+              </span>
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs"
+                title={darkMode ? "Banish the shadows, switch to Light Mode" : "Rest your eyes, switch to Dark Mode"}
+              >
+                {darkMode ? (
+                  <>
+                    <Sun className="w-3.5 h-3.5 text-amber-500 fill-amber-500 animate-spin-slow" />
+                    <span className="text-amber-500">Light</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500" />
+                    <span className="text-slate-500">Dark</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Sidebar Footer with Credits */}
@@ -738,7 +740,7 @@ export default function App() {
           )}
 
           {activeTab === "professor" && (
-            <InteractiveProfessor onAddMinutes={handleAddStudyMinutes} />
+            <InteractiveProfessor user={user} onAddMinutes={handleAddStudyMinutes} aiModelMode={aiModelMode} />
           )}
 
           {activeTab === "flashcards" && (
@@ -770,7 +772,7 @@ export default function App() {
           )}
 
           {activeTab === "interview" && (
-            <TechnicalInterviewSimulator />
+            <TechnicalInterviewSimulator aiModelMode={aiModelMode} user={user} />
           )}
 
           {activeTab === "backup" && (

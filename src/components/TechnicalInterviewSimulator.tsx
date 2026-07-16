@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { motion } from "motion/react";
 import { GoogleGenAI } from "@google/genai";
 import { 
   Briefcase, 
@@ -25,7 +26,8 @@ import {
   Loader2,
   HelpCircle
 } from "lucide-react";
-import { auth, saveInterviewSessionToCloud } from "../lib/firebase";
+import { auth, db, saveInterviewSessionToCloud } from "../lib/firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
 interface Interviewer {
   id: string;
@@ -227,7 +229,12 @@ const INITIAL_ROADMAP_ITEMS = [
   }
 ];
 
-export const TechnicalInterviewSimulator: React.FC = () => {
+interface TechnicalInterviewSimulatorProps {
+  user?: any;
+  aiModelMode?: "fast" | "expert";
+}
+
+export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorProps> = ({ user, aiModelMode = "expert" }) => {
   const [activeSubTab, setActiveSubTab] = useState<"interview" | "roadmap">("interview");
   
   // Interview Simulator States
@@ -241,15 +248,27 @@ export const TechnicalInterviewSimulator: React.FC = () => {
   const [isSavingSession, setIsSavingSession] = useState<boolean>(false);
   const [sessionSaved, setSessionSaved] = useState<boolean>(false);
 
-  // Roadmap State persistence via localStorage
+  // Roadmap State persistence via Firestore or localStorage
   const [roadmapItems, setRoadmapItems] = useState(() => {
-    const saved = localStorage.getItem("aws_roadmap_items_v1");
-    return saved ? JSON.parse(saved) : INITIAL_ROADMAP_ITEMS;
+    return INITIAL_ROADMAP_ITEMS;
   });
 
   useEffect(() => {
-    localStorage.setItem("aws_roadmap_items_v1", JSON.stringify(roadmapItems));
-  }, [roadmapItems]);
+    if (user) {
+      const roadmapDocRef = doc(db, "users", user.uid, "roadmap", "items");
+      const unsubscribe = onSnapshot(roadmapDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setRoadmapItems(docSnap.data().items || INITIAL_ROADMAP_ITEMS);
+        }
+      });
+      return () => unsubscribe();
+    } else {
+      const saved = localStorage.getItem("aws_roadmap_items_v1");
+      if (saved) {
+        try { setRoadmapItems(JSON.parse(saved)); } catch (e) {}
+      }
+    }
+  }, [user]);
 
   const handleSaveSession = async () => {
     if (!auth.currentUser || !scorecard) return;
@@ -270,10 +289,18 @@ export const TechnicalInterviewSimulator: React.FC = () => {
     }
   };
 
-  const toggleRoadmapItem = (id: string) => {
-    setRoadmapItems((prev: any[]) =>
-      prev.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
+  const toggleRoadmapItem = async (id: string) => {
+    const newItems = roadmapItems.map((item: any) =>
+      item.id === id ? { ...item, completed: !item.completed } : item
     );
+    setRoadmapItems(newItems);
+    
+    if (user) {
+      const roadmapDocRef = doc(db, "users", user.uid, "roadmap", "items");
+      await setDoc(roadmapDocRef, { items: newItems }, { merge: true });
+    } else {
+      localStorage.setItem("aws_roadmap_items_v1", JSON.stringify(newItems));
+    }
   };
 
   const resetInterviewState = () => {
@@ -340,7 +367,7 @@ Evaluate the user's response to the scenario. Provide deep Socratic architectura
 `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-pro",
+        model: aiModelMode === "fast" ? "gemini-2.5-flash" : "gemini-1.5-pro",
         contents: prompt,
         config: {
           systemInstruction: "You are an elite, strict AWS solutions architect evaluating a candidate. Be extremely precise and provide deep Socratic architectural analysis rather than generic responses. Output strictly as JSON.",
@@ -634,10 +661,12 @@ Evaluate the user's response to the scenario. Provide deep Socratic architectura
               {/* Action Trigger Row */}
               <div className="flex justify-end pt-2 border-t border-slate-100 gap-3">
                 {!hasSubmitted ? (
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={handleEvaluateResponse}
                     disabled={!userResponse.trim() || isEvaluating}
-                    className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+                    className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-[0_0_10px_rgba(0,0,0,0.2)] hover:shadow-[0_0_15px_rgba(0,0,0,0.3)]"
                   >
                     {isEvaluating ? (
                       <>
@@ -650,24 +679,28 @@ Evaluate the user's response to the scenario. Provide deep Socratic architectura
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
-                  </button>
+                  </motion.button>
                 ) : (
                   <>
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       onClick={handleSaveSession}
                       disabled={isSavingSession || sessionSaved}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-[0_0_10px_rgba(37,99,235,0.3)] hover:shadow-[0_0_15px_rgba(37,99,235,0.4)]"
                     >
                       <Save className="w-4 h-4" />
                       {isSavingSession ? "Saving..." : sessionSaved ? "Saved!" : "Save Session"}
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       onClick={resetInterviewState}
-                      className="px-5 py-2.5 bg-[#FF9900] hover:bg-amber-600 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="px-5 py-2.5 bg-[#FF9900] hover:bg-amber-600 text-white text-xs font-bold rounded-sm shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer shadow-[0_0_10px_rgba(255,153,0,0.3)] hover:shadow-[0_0_15px_rgba(255,153,0,0.4)]"
                     >
                       Retry Active Scenario
                       <RefreshCw className="w-4 h-4" />
-                    </button>
+                    </motion.button>
                   </>
                 )}
               </div>

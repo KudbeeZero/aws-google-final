@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { AlertCircle, HelpCircle, Trophy, ChevronLeft, ChevronRight, Check, RefreshCw, Star, Info } from "lucide-react";
 import { TrickQuestion, TrickQuestionOption } from "../types";
+import { ParticleEffect } from "./ParticleEffect";
 
 interface TrickQuestionSimulatorProps {
   questions: TrickQuestion[];
@@ -18,6 +19,7 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedKey, setSelectedKey] = useState<"A" | "B" | "C" | "D" | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [particles, setParticles] = useState<{ id: string; x: number; y: number }[]>([]);
 
   const activeQuestion = questions[currentIdx];
 
@@ -32,11 +34,19 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
     setSelectedKey(key);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.MouseEvent) => {
     if (!selectedKey || isSubmitted) return;
     const isCorrect = selectedKey === activeQuestion.correctAnswer;
     onRecordResult(activeQuestion.id, isCorrect);
     setIsSubmitted(true);
+
+    if (isCorrect) {
+      const newParticle = { id: Date.now().toString(), x: e.clientX, y: e.clientY };
+      setParticles(prev => [...prev, newParticle]);
+      setTimeout(() => {
+        setParticles(prev => prev.filter(p => p.id !== newParticle.id));
+      }, 1000);
+    }
   };
 
   const handleNext = () => {
@@ -189,7 +199,10 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
           </div>
 
           {/* Action buttons footer */}
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between relative">
+            {particles.map(p => (
+              <ParticleEffect key={p.id} x={p.x} y={p.y} />
+            ))}
             <div className="flex space-x-2">
               <button
                 disabled={currentIdx === 0}

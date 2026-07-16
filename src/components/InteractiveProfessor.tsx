@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { GoogleGenAI } from "@google/genai";
 import Markdown from "react-markdown";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import { 
   Bot, 
   Send, 
@@ -33,7 +35,9 @@ interface ChatMessage {
 }
 
 interface InteractiveProfessorProps {
+  user?: any;
   onAddMinutes?: (mins: number) => void;
+  aiModelMode?: "fast" | "expert";
 }
 
 const SYSTEM_INSTRUCTION = `You are 'Professor Cloud'—an elite AWS Solutions Architect and an encouraging, interactive Socratic mentor.
@@ -62,8 +66,8 @@ const INITIAL_WELCOME: ChatMessage = {
   timestamp: new Date().toISOString()
 };
 
-export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAddMinutes }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user, onAddMinutes, aiModelMode = "expert" }) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_WELCOME]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -81,24 +85,37 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
     return (metaEnv?.VITE_GEMINI_API_KEY as string) || "";
   });
 
-  // Load chat history from localStorage
+  // Load chat history from Firestore or localStorage
   useEffect(() => {
-    const savedChat = localStorage.getItem("aws_professor_chat_history_v1");
-    if (savedChat) {
-      try {
-        setMessages(JSON.parse(savedChat));
-      } catch (e) {
-        setMessages([INITIAL_WELCOME]);
-      }
+    if (user) {
+      const chatDocRef = doc(db, "users", user.uid, "professor_chat", "history");
+      const unsubscribe = onSnapshot(chatDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setMessages(docSnap.data().messages || [INITIAL_WELCOME]);
+        }
+      });
+      return () => unsubscribe();
     } else {
-      setMessages([INITIAL_WELCOME]);
+      const savedChat = localStorage.getItem("aws_professor_chat_history_v1");
+      if (savedChat) {
+        try {
+          setMessages(JSON.parse(savedChat));
+        } catch (e) {
+          setMessages([INITIAL_WELCOME]);
+        }
+      }
     }
-  }, []);
+  }, [user]);
 
-  // Save chat history to localStorage
-  const saveHistory = (newMessages: ChatMessage[]) => {
+  // Save chat history to Firestore or localStorage
+  const saveHistory = async (newMessages: ChatMessage[]) => {
     setMessages(newMessages);
-    localStorage.setItem("aws_professor_chat_history_v1", JSON.stringify(newMessages));
+    if (user) {
+      const chatDocRef = doc(db, "users", user.uid, "professor_chat", "history");
+      await setDoc(chatDocRef, { messages: newMessages }, { merge: true });
+    } else {
+      localStorage.setItem("aws_professor_chat_history_v1", JSON.stringify(newMessages));
+    }
   };
 
   // Scroll to bottom when messages change or loading state changes
@@ -209,9 +226,9 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
         parts: [{ text: msg.text }]
       }));
 
-      // Call Gemini 1.5 Pro as requested by user
+      // Call Gemini model
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-pro",
+        model: aiModelMode === "fast" ? "gemini-2.5-flash" : "gemini-1.5-pro",
         contents,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
@@ -647,7 +664,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ onAd
                 <Flame className="w-3 h-3 text-[#FF9900]" />
                 Interactive responses add +2m study time
               </span>
-              <span>Model: gemini-1.5-pro</span>
+              <span>Model: {aiModelMode === "fast" ? "gemini-2.5-flash" : "gemini-1.5-pro"}</span>
             </div>
 
           </div>

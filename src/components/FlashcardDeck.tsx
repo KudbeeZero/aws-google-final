@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight, Award, Trash2, HelpCircle, Flame, Star } from "lucide-react";
 import { Flashcard, DomainData } from "../types";
+import { ParticleEffect } from "./ParticleEffect";
 
 interface FlashcardDeckProps {
   flashcards: Flashcard[];
@@ -23,6 +24,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [particles, setParticles] = useState<{ id: string; x: number; y: number }[]>([]);
 
   // Filter flashcards based on selection
   const filteredCards = flashcards.filter((fc) => {
@@ -55,8 +57,17 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
     }
   };
 
-  const handleMark = (status: "known" | "review") => {
+  const handleMark = (status: "known" | "review", e?: React.MouseEvent) => {
     if (filteredCards.length === 0) return;
+    
+    if (status === "known" && e) {
+      const newParticle = { id: Date.now().toString(), x: e.clientX, y: e.clientY };
+      setParticles(prev => [...prev, newParticle]);
+      setTimeout(() => {
+        setParticles(prev => prev.filter(p => p.id !== newParticle.id));
+      }, 1000);
+    }
+
     const cardId = filteredCards[currentIdx].id;
     onMarkCard(cardId, status);
     
@@ -228,10 +239,13 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
             </div>
 
             {/* Active Recall Buttons */}
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 space-y-3 relative">
+              {particles.map(p => (
+                <ParticleEffect key={p.id} x={p.x} y={p.y} />
+              ))}
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => handleMark("review")}
+                  onClick={(e) => handleMark("review", e)}
                   className={`py-2 px-4 text-xs font-bold border rounded-sm flex items-center justify-center gap-1.5 transition-all ${
                     activeCardStatus === "review"
                       ? "bg-amber-100 border-amber-300 text-amber-800"
@@ -241,7 +255,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
                   ❌ I Got This Wrong (Send to Review Pool)
                 </button>
                 <button
-                  onClick={() => handleMark("known")}
+                  onClick={(e) => handleMark("known", e)}
                   className={`py-2 px-4 text-xs font-bold border rounded-sm flex items-center justify-center gap-1.5 transition-all ${
                     activeCardStatus === "known"
                       ? "bg-emerald-100 border-emerald-300 text-emerald-800"
