@@ -1,0 +1,6 @@
+{
+  "name": "AWS CLF-C02 Study Companion",
+  "description": "Interactive study environment and exam trick simulator for AWS Certified Cloud Practitioner (CLF-C02).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
