@@ -12,6 +12,19 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       }
     },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "An entry in the global study streak leaderboard",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "streak": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
     "Flashcard": {
       "title": "Flashcard",
       "description": "A flashcard item for the user",
@@ -34,6 +47,10 @@
     }
   },
   "firestore": {
+    "/leaderboard/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Global leaderboard entry by user ID"
+    },
     "/users/{userId}/profile/data": {
       "schema": "UserProfile",
       "description": "The user's progress and profile data"

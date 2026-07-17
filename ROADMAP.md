@@ -10,7 +10,8 @@ These tasks are structured to deliver a robust, persistent, and highly polished 
 
 | Priority | Task Name | Description | Status |
 | :---: | :--- | :--- | :--- |
-| **1** | **Cloudflare & Web-Ready Sign-In Setup** | Review, test, and adapt Firebase Authentication configurations (Authorized Domains, redirect handling, and cookie policies) to support seamless authentication when running on external web hosts like Cloudflare Pages/Workers, without breaking the dev environment. | ⏳ Pending |
+| **1** | **Cloudflare & Web-Ready Sign-In Setup** | Review, test, and adapt Firebase Authentication configurations (Authorized Domains, redirect handling, and cookie policies) to support seamless authentication when running on external web hosts like Cloudflare Pages/Workers, without breaking the dev environment. | ✅ Completed |
+| **-** | **Global Streaks Leaderboard** | Implement a global study streak leaderboard in the dashboard, enabling users to fetch and display the top 5 learners' streaks securely from Firestore. | ✅ Completed |
 | **2** | **Multi-Module Progress Persistence** | Extend the PostgreSQL (`user_progress`) schema and backend Express endpoints to fully persist student progress in sub-modules like *HonePathwayView*, *TrickQuestionSimulator*, and *TheDistractorVault*, ensuring no progress is lost across page sessions. | ⏳ Pending |
 | **3** | **Offline-to-Cloud State Reconciliation** | Design an intelligent syncing mechanism that handles state reconciliation for users starting as guests (stored in `localStorage`) or offline, merging their study sessions and logs cleanly upon authentication/reconnection. | ⏳ Pending |
 | **4** | **Technical Interview / Exam Simulator Archival** | Build database storage schemas to save and display historic technical interview transcripts, scores, and mock interview cards inside the student dashboard for comprehensive performance analysis over time. | ⏳ Pending |

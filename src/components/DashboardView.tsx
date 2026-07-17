@@ -8,7 +8,8 @@ import { DailyGoalTracker } from "./DailyGoalTracker";
 import { WeeklyStudyChart } from "./WeeklyStudyChart";
 import { MonthlyHeatmap } from "./MonthlyHeatmap";
 import { Achievements } from "./Achievements";
-import { loginWithGoogle, loginAnonymously, logoutUser, registerWithEmail, loginWithEmail } from "../lib/firebase";
+import { GlobalLeaderboard } from "./GlobalLeaderboard";
+import { loginWithGoogle, loginAnonymously, logoutUser, registerWithEmail, loginWithEmail, getAuthDiagnostics, FirebaseAuthError } from "../lib/firebase";
 
 const AchievementIcon: React.FC<{ name: string; unlocked: boolean }> = ({ name, unlocked }) => {
   const baseClass = `w-5 h-5 ${unlocked ? "text-[#FF9900]" : "text-slate-400"}`;
@@ -130,6 +131,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }
 
   const [authError, setAuthError] = React.useState<string | null>(null);
+  const [authSuggestedAction, setAuthSuggestedAction] = React.useState<string | null>(null);
+  const [authErrorGuide, setAuthErrorGuide] = React.useState<string | null>(null);
+  const [showDiagnostics, setShowDiagnostics] = React.useState<boolean>(false);
   const [showEmailAuth, setShowEmailAuth] = React.useState<boolean>(false);
   const [email, setEmail] = React.useState<string>("");
   const [password, setPassword] = React.useState<string>("");
@@ -577,10 +581,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   onClick={async () => {
                     try {
                       setAuthError(null);
+                      setAuthSuggestedAction(null);
+                      setAuthErrorGuide(null);
                       await loginWithGoogle();
                     } catch (e: any) {
                       console.error("Google Auth failed:", e);
-                      setAuthError("Google Sign-In was closed or blocked. If you are inside an iframe, please use the 'Open in New Tab' button to run in a standalone tab and sign in successfully.");
+                      if (e.name === "FirebaseAuthError" || e.suggestedAction || e.errorGuide) {
+                        setAuthError(e.message || "Authentication failed.");
+                        setAuthSuggestedAction(e.suggestedAction || null);
+                        setAuthErrorGuide(e.errorGuide || null);
+                      } else {
+                        setAuthError(e.message || "Google Sign-In was closed or blocked. If you are inside an iframe, please use the 'Open in New Tab' button to run in a standalone tab and sign in successfully.");
+                        const diagnostics = getAuthDiagnostics();
+                        if (diagnostics.suggestedAction) {
+                          setAuthSuggestedAction(diagnostics.suggestedAction);
+                          setAuthErrorGuide(diagnostics.errorGuide || "Environment security policies are preventing authentication.");
+                        }
+                      }
                     }
                   }}
                   className="flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold rounded-sm transition-all shadow-sm cursor-pointer whitespace-nowrap"
@@ -622,6 +639,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 >
                   Guest Sync
                 </button>
+
+                <button
+                  onClick={() => {
+                    const diagnostics = getAuthDiagnostics();
+                    setAuthError(null);
+                    setAuthSuggestedAction(diagnostics.suggestedAction || "Everything looks correctly configured for standard environments.");
+                    setAuthErrorGuide(diagnostics.errorGuide || "No immediate environmental blocks detected.");
+                    setShowDiagnostics(true);
+                  }}
+                  className="px-3 py-2 border border-slate-200 dark:border-slate-750 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-350 text-xs font-bold rounded-sm transition-all text-center cursor-pointer whitespace-nowrap flex items-center gap-1"
+                  title="Run Environment Diagnostics & Troubleshoot login issues"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                  <span>Troubleshoot</span>
+                </button>
               </div>
             )}
           </div>
@@ -643,13 +675,68 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
         )}
+
+        {/* Troubleshooter & Diagnostic Assistant */}
+        {(authSuggestedAction || authErrorGuide || showDiagnostics) && (
+          <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm text-xs text-slate-700 dark:text-slate-300 animate-fade-in space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+              <h5 className="font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-[#FF9900]" />
+                <span>Web-Host Auth Troubleshooter</span>
+              </h5>
+              <button
+                onClick={() => {
+                  setAuthSuggestedAction(null);
+                  setAuthErrorGuide(null);
+                  setShowDiagnostics(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-extrabold text-xs"
+              >
+                Close
+              </button>
+            </div>
+            
+            {authErrorGuide && (
+              <div>
+                <p className="font-bold text-slate-800 dark:text-slate-200 mb-1">Status Report:</p>
+                <div className="p-2 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-950/50 rounded-sm font-medium text-rose-800 dark:text-rose-400">
+                  {authErrorGuide}
+                </div>
+              </div>
+            )}
+
+            {authSuggestedAction && (
+              <div>
+                <p className="font-bold text-slate-800 dark:text-slate-200 mb-1">Recommended Action:</p>
+                <div className="p-2.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-950/50 rounded-sm font-medium text-amber-800 dark:text-amber-400 leading-relaxed">
+                  {authSuggestedAction}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <p className="font-bold text-slate-800 dark:text-slate-200">Staging & Web-Host Checklist:</p>
+              <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400">
+                <li>
+                  <strong className="text-slate-700 dark:text-slate-300">Authorized Domains:</strong> Ensure <code className="bg-slate-200 dark:bg-slate-800 px-1 rounded text-[10px] font-mono">{typeof window !== "undefined" ? window.location.hostname : "your-domain.com"}</code> is explicitly whitelisted in the Firebase Console (Authentication &gt; Settings &gt; Authorized Domains).
+                </li>
+                <li>
+                  <strong className="text-slate-700 dark:text-slate-300">Third-Party Cookies:</strong> Privacy-centric browser controls (like Brave shields, Safari cross-site tracking, or Chrome incognito) block Google Auth popups. Choose the <span className="font-semibold text-[#FF9900]">Email Sign-In</span> alternative if cookies are restricted.
+                </li>
+                <li>
+                  <strong className="text-slate-700 dark:text-slate-300">Staging Hostnames:</strong> When deploying on Cloudflare Pages or Vercel, dynamic branch URLs (e.g. <code className="bg-slate-200 dark:bg-slate-800 px-1 rounded text-[10px] font-mono">*.pages.dev</code>) are used. Remember to add these generated hostnames to your Firebase whitelist.
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Top Banner Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Readiness Score Circular/Hero Gauge (5 cols) */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 p-6 rounded-sm flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden">
+        {/* Readiness Score Circular/Hero Gauge (4 cols) */}
+        <div className="lg:col-span-4 bg-white border border-slate-200 p-6 rounded-sm flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden">
           <div className="absolute top-0 right-0 p-2 bg-[#FF9900]/10 text-[#FF9900] text-[9px] font-bold uppercase tracking-wider rounded-bl-sm">
             Ready Check
           </div>
@@ -683,8 +770,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        {/* Overview Stats (7 cols) */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 p-6 rounded-sm shadow-sm flex flex-col justify-between">
+        {/* Overview Stats (4 cols) */}
+        <div className="lg:col-span-4 bg-white border border-slate-200 p-6 rounded-sm shadow-sm flex flex-col justify-between">
           <div>
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
               Your Learning Pulse
@@ -754,6 +841,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Global Streaks Leaderboard (4 cols) */}
+        <div className="lg:col-span-4">
+          <GlobalLeaderboard currentUserId={user?.uid} currentStreak={streak} />
+        </div>
+
       </div>
 
       {/* Daily Study Goal Progress Tracker */}

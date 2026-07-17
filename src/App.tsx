@@ -48,6 +48,7 @@ import {
   logoutUser, 
   saveProgressToCloud, 
   getProgressFromCloud,
+  syncStreakToLeaderboard
 } from "./lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 
@@ -289,6 +290,19 @@ export default function App() {
       return () => clearTimeout(delaySave);
     }
   }, [user, hasLoadedCloudData, totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog]);
+
+  // Sync streak to the Global Leaderboard in Firestore
+  useEffect(() => {
+    if (user && hasLoadedCloudData) {
+      syncStreakToLeaderboard(
+        user.uid,
+        user.displayName,
+        user.email,
+        user.photoURL,
+        streak
+      );
+    }
+  }, [user, hasLoadedCloudData, streak]);
 
   // Handle daily study goal metrics
   const handleUpdateDailyGoal = (mins: number) => {
