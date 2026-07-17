@@ -169,8 +169,96 @@ const SCENARIOS: InterviewScenario[] = [
       "Configure VPC Security Groups to reject all traffic except requests sourced directly from CloudFront IP blocks."
     ],
     optimalResponseStructure: "Design defense-in-depth starting from the edge. Set up Amazon Route 53 and Amazon CloudFront to absorb network-level spikes globally. Subscribe to AWS Shield Advanced for proactive protection and DRT expert engagement. Implement AWS WAF rulesets targeting SQL Injection and crawler scripts. Limit backend Security Groups to trust only CloudFront proxies."
+  },
+  {
+    id: "sc-6",
+    title: "The Scalable Serverless Microservice API",
+    domain: "Technology & Services",
+    difficulty: "Beginner",
+    question: "Our development team is launching a new public API that needs to scale instantly from zero to thousands of requests with minimal operations overhead. They also need a fully managed NoSQL database. What serverless AWS architecture would you design?",
+    requiredKeywords: ["Lambda", "API Gateway", "DynamoDB", "S3", "CloudWatch"],
+    helperTips: [
+      "Utilize Amazon API Gateway to receive HTTPS endpoints and throttle traffic.",
+      "Execute application logic inside AWS Lambda for zero-admin serverless compute.",
+      "Save transactional data inside Amazon DynamoDB for seamless high-throughput NoSQL storage.",
+      "Store static front-end assets inside Amazon S3 and monitor performance with Amazon CloudWatch."
+    ],
+    optimalResponseStructure: "Propose placing Amazon API Gateway at the public boundary. Integrate API Gateway directly with AWS Lambda functions to handle backend microservice routing. Write persistent transactional state to Amazon DynamoDB, a fully managed NoSQL catalog. Configure Amazon CloudWatch for unified logging and set up S3 static website hosting for front-end presentation."
+  },
+  {
+    id: "sc-7",
+    title: "The Shared Responsibility Boundary",
+    domain: "Cloud Concepts & Tech",
+    difficulty: "Beginner",
+    question: "A customer wants to deploy a proprietary medical records application onto AWS EC2 instances, and is confused about who handles what. Specifically, who is responsible for patching the guest operating system, securing physical data centers, and encrypting customer data?",
+    requiredKeywords: ["Shared Responsibility", "AWS Artifact", "Guest OS", "Infrastructure", "Encryption"],
+    helperTips: [
+      "Reference the AWS Shared Responsibility Model to split duties cleanly.",
+      "State that AWS is responsible for security 'OF' the cloud (hardware, physical data centers, hypervisor).",
+      "State that the customer is responsible for security 'IN' the cloud (patching the Guest OS, firewalls, and data encryption).",
+      "Mention AWS Artifact to download compliance and security audit reports."
+    ],
+    optimalResponseStructure: "Reference the AWS Shared Responsibility Model explicitly. Clarify that AWS secures 'OF' the cloud—shielding hardware, hypervisors, global infrastructure, and physical vaults. Explain that the client owns security 'IN' the cloud—meaning they must patch the Guest OS, manage application firewalls, set up KMS Encryption, and govern IAM permissions. Point them to AWS Artifact for compliance validation reports."
+  },
+  {
+    id: "sc-8",
+    title: "The Secure Multi-Tier VPC Layout",
+    domain: "Security & Compliance",
+    difficulty: "Advanced",
+    question: "We are building an enterprise billing application that must run behind virtual machines. The app server must access the internet for updates, but the database must never be exposed directly to the outside world. How do you design a secure multi-tier virtual network to satisfy these rules?",
+    requiredKeywords: ["VPC", "Private Subnet", "NAT Gateway", "Internet Gateway", "Network ACL"],
+    helperTips: [
+      "Design an isolated Amazon Virtual Private Cloud (VPC) spanning multiple Availability Zones.",
+      "Deploy public subnets for the load balancers and NAT Gateways.",
+      "Deploy private subnets for the application servers and database engines.",
+      "Configure an Internet Gateway for public ingress, a NAT Gateway to allow private subnet internet egress, and Network ACLs as subnet boundaries."
+    ],
+    optimalResponseStructure: "Begin by provisioning an Amazon VPC (Virtual Private Cloud). Segment the VPC into Public Subnets (facing the Internet Gateway) and Private Subnets. Place the public-facing Load Balancer in the public subnet, and the app VMs and database in isolated private subnets. Route private subnet internet outbound traffic through a secure NAT Gateway. Enforce subnet boundaries utilizing stateless Network ACLs and stateful Security Groups."
   }
 ];
+
+const VOCAB_DEFINITIONS: Record<string, string> = {
+  "Aurora": "Amazon Aurora: A high-performance, fully managed relational database engine compatible with MySQL and PostgreSQL.",
+  "Multi-AZ": "Multi-AZ Deployment: Provisioning redundant database replicas in a different Availability Zone for automatic failover and high availability.",
+  "Read Replicas": "Read Replicas: Secondary database instances used to offload read traffic from the primary database node, boosting query performance.",
+  "ElastiCache": "Amazon ElastiCache: A fully managed, in-memory caching service (supporting Redis/Memcached) to accelerate database response times.",
+  "Auto Scaling": "AWS Auto Scaling: Automatically adjusting compute capacity (like EC2 instances) up or down based on real-time traffic demand.",
+  "IAM Role": "IAM Role: An identity with permission policies that can be assumed by AWS services (e.g. EC2) instead of using hardcoded long-term keys.",
+  "Least Privilege": "Principle of Least Privilege: Giving users or services only the minimum necessary permissions required to perform their specific task.",
+  "IAM Policy": "IAM Policy: A JSON document defining permissions (allow/deny actions) that is attached to IAM Users, Groups, or Roles.",
+  "Access Keys": "Access Keys: Long-term credentials (Access Key ID and Secret Access Key) that should NEVER be hardcoded or checked into source code.",
+  "Temporary Credentials": "Temporary Credentials: Short-lived credentials provided by AWS Security Token Service (STS) or IAM Roles that rotate automatically.",
+  "Warm Standby": "Warm Standby: A disaster recovery strategy where a scaled-down but fully functional copy of the environment runs continuously in another region.",
+  "Pilot Light": "Pilot Light: A DR strategy where core database/storage structures run in a secondary region, but application servers remain offline until failover.",
+  "Multi-Region": "Multi-Region Architecture: Deploying applications across separate geographical AWS regions to guarantee survival of catastrophic regional outages.",
+  "Route 53 Failover": "Route 53 Failover Routing: DNS-level routing that automatically redirects user traffic to a backup environment when primary health checks fail.",
+  "Global Database": "Amazon Aurora Global Database: Supports sub-second database replication across multiple global AWS regions for disaster recovery.",
+  "Cost Explorer": "AWS Cost Explorer: A tool to visualize, analyze, and forecast historical and current AWS resource costs and usage trends.",
+  "AWS Budgets": "AWS Budgets: A tool to set custom spending limits and trigger proactive email or SMS alerts when costs exceed defined thresholds.",
+  "Savings Plans": "AWS Savings Plans: A flexible pricing model that offers low rates in exchange for a commitment to a consistent amount of usage.",
+  "Spot Instances": "Amazon EC2 Spot Instances: Unused EC2 capacity available at up to 90% discount, suitable for fault-tolerant, flexible workloads.",
+  "Instance Scheduler": "AWS Instance Scheduler: An automated solution that starts and stops EC2 or RDS instances on a defined custom calendar schedule.",
+  "WAF": "AWS WAF: Web Application Firewall that shields web apps from common exploits, SQL injections, cross-site scripting, and malicious scraping bots.",
+  "Shield Advanced": "AWS Shield Advanced: A managed service providing comprehensive DDoS protection, specialized health-based routing, and 24/7 DRT support.",
+  "CloudFront": "Amazon CloudFront: A global Content Delivery Network (CDN) that delivers static and dynamic web content with low latency.",
+  "Security Groups": "Security Groups: Stateful virtual firewalls that control inbound and outbound traffic at the individual instance/resource level.",
+  "Route 53": "Amazon Route 53: A highly available and scalable Domain Name System (DNS) web service with health checking and advanced routing capabilities.",
+  "Lambda": "AWS Lambda: Serverless compute service that runs code in response to events and automatically manages the underlying resources.",
+  "API Gateway": "Amazon API Gateway: A fully managed service that makes it easy for developers to create, publish, maintain, and secure APIs at any scale.",
+  "DynamoDB": "Amazon DynamoDB: A fully managed, serverless, high-throughput NoSQL database service that provides single-digit millisecond latency.",
+  "S3": "Amazon Simple Storage Service: Scalable, secure object storage service widely used for backups, files, and hosting static website code.",
+  "CloudWatch": "Amazon CloudWatch: A monitoring and observability service providing logs, metrics, alerts, and real-time dashboard views of AWS resources.",
+  "Shared Responsibility": "Shared Responsibility Model: AWS is responsible for security 'OF' the cloud (hardware/global infrastructure); customers secure 'IN' the cloud.",
+  "AWS Artifact": "AWS Artifact: A self-service portal providing on-demand access to AWS security and compliance reports and select online agreements.",
+  "Guest OS": "Guest Operating System: The OS running inside a virtual machine (like EC2). Under the Shared Responsibility Model, the customer must patch it.",
+  "Infrastructure": "Physical/Global Infrastructure: AWS's regions, availability zones, and edge locations. AWS is 100% responsible for securing these physical centers.",
+  "Encryption": "Data Encryption: Securing data at rest or in transit. The customer is responsible for configuring KMS, TLS, and client-side encryption.",
+  "VPC": "Amazon VPC: A logically isolated virtual network where you launch AWS resources, enabling customized IP ranges, subnets, and route tables.",
+  "Private Subnet": "Private Subnet: A subnet within a VPC that does NOT have a route to an Internet Gateway; resources inside cannot be reached from the internet.",
+  "NAT Gateway": "NAT Gateway: Network Address Translation gateway allowing resources in private subnets to send outbound internet traffic while blocking inbound connections.",
+  "Internet Gateway": "Internet Gateway: VPC component allowing communication between public subnets and the internet, enabling public IP traffic routing.",
+  "Network ACL": "Network Access Control List: An optional, stateless layer of security for subnets that acts as a firewall for controlling packet ingress and egress."
+};
 
 const INITIAL_ROADMAP_ITEMS = [
   {
@@ -248,6 +336,33 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
   const [isSavingSession, setIsSavingSession] = useState<boolean>(false);
   const [sessionSaved, setSessionSaved] = useState<boolean>(false);
 
+  // Interactive Boardroom States
+  const [isInterviewActive, setIsInterviewActive] = useState<boolean>(false);
+  const [difficultyMode, setDifficultyMode] = useState<"Easy" | "Medium" | "Hard">("Medium");
+  const [interviewFormat, setInterviewFormat] = useState<"single" | "panel">("single");
+  const [currentScenarioIndex, setCurrentScenarioIndex] = useState<number>(0);
+  const [sessionScenarios, setSessionScenarios] = useState<InterviewScenario[]>([]);
+  const [sessionScorecards, setSessionScorecards] = useState<ScorecardResult[]>([]);
+  const [sessionTranscripts, setSessionTranscripts] = useState<string[]>([]);
+  const [hintsLeft, setHintsLeft] = useState<number>(1);
+  const [cameraLoading, setCameraLoading] = useState<boolean>(false);
+  const [isSessionFinished, setIsSessionFinished] = useState<boolean>(false);
+  const [sessionTimer, setSessionTimer] = useState<number>(0);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+
+  // Timer simulation
+  useEffect(() => {
+    let interval: any = null;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setSessionTimer((prev) => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning]);
+
   // Roadmap State persistence via Firestore or localStorage
   const [roadmapItems, setRoadmapItems] = useState(() => {
     return INITIAL_ROADMAP_ITEMS;
@@ -317,24 +432,84 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
     setUserResponse((prev) => (prev ? prev + " " + phrase : phrase));
   };
 
-  // Simulating Voice Recording Drafts
+  // Simulating Voice Recording Drafts for all 8 Scenarios
   const handleSimulateVoiceInput = () => {
     setIsRecording(true);
-    const mockSpeeches = [
-      "To resolve these heavy scaling bottlenecks, I would migrate the current relational database to Amazon Aurora for a cloud-native engine. I would deploy a Multi-AZ architecture to support automated failover and maximize high availability. To scale high-read volumes, I'd spin up Aurora Read Replicas and route read queries there. Finally, I will place an Amazon ElastiCache cluster in front of the database to cache heavy query results.",
-      "I would strictly reject hardcoding keys on EC2. Instead, I'll build an IAM Role with a custom IAM Policy that adheres to the Principle of Least Privilege, specifically granting read permission for S3 and write for SQS. Applying the IAM Role ensures AWS yields safe temporary credentials automatically.",
-      "For a disaster recovery strategy with an RTO of 15 minutes, we must configure a Warm Standby in a secondary AWS Region. We can route our traffic dynamically via Amazon Route 53 Failover routing based on active health checks. To guarantee database recovery within our 10-minute RPO, we will deploy an Amazon Aurora Global Database with sub-second replication times."
-    ];
+    
+    const mockSpeeches: Record<string, string> = {
+      "sc-1": "To resolve these heavy database scaling bottlenecks, I would migrate our database to Amazon Aurora, which is a modern, high-performance cloud-native relational engine. I would deploy it as a Multi-AZ architecture to guarantee automated failover and maximize high availability. To scale high-read volumes, I'd spin up multiple Aurora Read Replicas and route read-only query streams to them. Finally, I will place an Amazon ElastiCache cluster in front of the database to store and cache heavy query results in memory.",
+      "sc-2": "I would strictly reject hardcoding keys on virtual machines as it creates critical security risks. Instead, I will build and attach an IAM Role directly to the EC2 instance (using instance profiles). I will construct an IAM Policy that adheres to the Principle of Least Privilege, specifically granting read permission for S3 and write actions for SQS. This ensures AWS yields safe temporary credentials that rotate automatically.",
+      "sc-3": "For a secure multi-region disaster recovery strategy with a strict RTO of 15 minutes, we must configure a Warm Standby in a secondary AWS Region. We can route our user traffic dynamically via Amazon Route 53 Failover routing based on active health checks. To guarantee database recovery within our 10-minute RPO, we will deploy an Amazon Aurora Global Database with sub-second replication times.",
+      "sc-4": "To analyze our high development costs, I would open AWS Cost Explorer to visualize where spending spikes are happening. I'd configure proactive AWS Budgets with active threshold notifications. To stop instances over weekends, I'll deploy the AWS Instance Scheduler. For temporary dev containers, we can transition to Spot Instances to save up to 90% and use Savings Plans to cover continuous production workloads.",
+      "sc-5": "To protect our system, I would deploy Amazon CloudFront at the outer edge to cache content globally. I'll subscribe to AWS Shield Advanced for dedicated Layer 3/4 protection. I'll configure AWS WAF rules on CloudFront to block crawler bots and common exploits. Finally, I will adjust VPC Security Groups to ensure backend web servers accept traffic only from our CloudFront proxies.",
+      "sc-6": "To build a serverless microservice, I would expose our public endpoints via Amazon API Gateway, which handles routing and throttling. I will run the application code inside AWS Lambda functions for stateless serverless compute. For storage, I will write persistent data to Amazon DynamoDB for millisecond-scale NoSQL lookups. Finally, I'll store static files in S3 and monitor performance metrics using Amazon CloudWatch.",
+      "sc-7": "Under the Shared Responsibility Model, AWS manages security OF the cloud, including physical data centers and hypervisor infrastructure. The customer is responsible for security IN the cloud, which includes patching the Guest OS, setting up local firewalls, and managing customer data Encryption. We can download official compliance documents from AWS Artifact.",
+      "sc-8": "To design this network, I will provision an Amazon VPC and segment it into Public Subnets and Private Subnets. I'll place our load balancer in the public subnet connected to an Internet Gateway. The application servers and databases will go in private subnets, using a NAT Gateway to permit secure outbound internet traffic for patches. Subnet boundaries will be protected using stateless Network ACLs and stateful Security Groups."
+    };
 
     setTimeout(() => {
       setIsRecording(false);
-      // Try to find a speech relevant to the current scenario
-      let relevantSpeech = mockSpeeches[0];
-      if (selectedScenario.id === "sc-2") relevantSpeech = mockSpeeches[1];
-      if (selectedScenario.id === "sc-3") relevantSpeech = mockSpeeches[2];
-      
+      const relevantSpeech = mockSpeeches[selectedScenario.id] || mockSpeeches["sc-1"];
       setUserResponse(relevantSpeech);
     }, 1500);
+  };
+
+  // Boardroom Lifecycle Managers
+  const startInterviewSession = (format: "single" | "panel", diff: "Easy" | "Medium" | "Hard", startingScenario: InterviewScenario) => {
+    setCameraLoading(true);
+    setInterviewFormat(format);
+    setDifficultyMode(diff);
+    setHintsLeft(diff === "Easy" ? 3 : diff === "Medium" ? 1 : 0);
+    setSessionTimer(0);
+    setIsSessionFinished(false);
+    setSessionScorecards([]);
+    setSessionTranscripts([]);
+    
+    if (format === "panel") {
+      // Create a 3-question session where the first is the starting scenario
+      const others = SCENARIOS.filter(s => s.id !== startingScenario.id);
+      const shuffledOthers = [...others].sort(() => 0.5 - Math.random());
+      const chosen = [startingScenario, shuffledOthers[0], shuffledOthers[1]];
+      setSessionScenarios(chosen);
+      setCurrentScenarioIndex(0);
+      setSelectedScenario(chosen[0]);
+    } else {
+      setSessionScenarios([startingScenario]);
+      setCurrentScenarioIndex(0);
+      setSelectedScenario(startingScenario);
+    }
+
+    setTimeout(() => {
+      setCameraLoading(false);
+      setIsInterviewActive(true);
+      setIsTimerRunning(true);
+      resetInterviewState();
+    }, 1500);
+  };
+
+  const advanceSessionQuestion = () => {
+    if (scorecard) {
+      setSessionScorecards(prev => [...prev, scorecard]);
+      setSessionTranscripts(prev => [...prev, userResponse]);
+    }
+    
+    const nextIndex = currentScenarioIndex + 1;
+    if (nextIndex < sessionScenarios.length) {
+      setCurrentScenarioIndex(nextIndex);
+      setSelectedScenario(sessionScenarios[nextIndex]);
+      resetInterviewState();
+      setHintsLeft(difficultyMode === "Easy" ? 3 : difficultyMode === "Medium" ? 1 : 0);
+    } else {
+      setIsTimerRunning(false);
+      setIsSessionFinished(true);
+    }
+  };
+
+  const exitInterviewSession = () => {
+    setIsInterviewActive(false);
+    setIsSessionFinished(false);
+    setIsTimerRunning(false);
+    resetInterviewState();
   };
 
   const [isEvaluating, setIsEvaluating] = useState(false);
@@ -361,11 +536,16 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
 Tone: ${selectedInterviewer.tone}
 Scenario: ${selectedScenario.question}
 Expected Keywords: ${selectedScenario.requiredKeywords.join(", ")}
+Chosen Difficulty Mode: ${difficultyMode}
+
+Evaluate the user's response based on the chosen difficulty level:
+- If difficulty is Easy: provide highly encouraging, supportive feedback and grade slightly more leniency in scores.
+- If difficulty is Hard: act as a highly critical, rigorous executive architect. Deduct points severely if they miss any of the expected key words/phrases or fail to structure their explanation according to Well-Architected guidelines.
 
 User Response:
 "${userResponse}"
 
-Evaluate the user's response to the scenario. Provide deep Socratic architectural analysis. Grade them strictly on AWS architecture correctness, security, best practices, and communication.
+Evaluate the user's response. Provide deep Socratic architectural analysis. Grade them strictly out of 100 on AWS architecture correctness, security, best practices, and communication.
 `;
 
       const response = await ai.models.generateContent({
@@ -420,26 +600,37 @@ Evaluate the user's response to the scenario. Provide deep Socratic architectura
       (kw) => !responseLower.includes(kw.toLowerCase())
     );
 
-    const matchPercent = Math.round(
+    let matchPercent = Math.round(
       (foundKeywords.length / selectedScenario.requiredKeywords.length) * 100
     );
 
+    // Dynamic scale based on chosen difficulty
+    if (difficultyMode === "Easy") {
+      matchPercent = Math.min(100, matchPercent + 15); // +15% lenient bonus for beginners
+    } else if (difficultyMode === "Hard") {
+      if (missingKeywords.length > 0) {
+        matchPercent = Math.max(0, matchPercent - 15); // -15% strict deduction for missing key terms
+      }
+    }
+
     // Calculate score rubrics
-    let accuracy = Math.min(100, Math.max(30, matchPercent + 10));
+    let accuracy = Math.min(100, Math.max(30, matchPercent + (difficultyMode === "Easy" ? 10 : difficultyMode === "Hard" ? -5 : 5)));
     let communication = Math.min(100, userResponse.length > 150 ? 95 : userResponse.length > 70 ? 75 : 50);
+    if (difficultyMode === "Easy") communication = Math.min(100, communication + 10);
+    
     let bestPractices = matchPercent >= 80 ? 98 : matchPercent >= 50 ? 80 : 55;
-    let businessValue = responseLower.includes("cost") || responseLower.includes("down") || responseLower.includes("failover") || responseLower.includes("temporary") ? 92 : 65;
+    let businessValue = responseLower.includes("cost") || responseLower.includes("down") || responseLower.includes("failover") || responseLower.includes("temporary") || responseLower.includes("serverless") ? 92 : 65;
 
     // Grades
     let grade: "Exemplary" | "Proficient" | "Developing" | "Needs Review" = "Needs Review";
-    if (matchPercent >= 80) grade = "Exemplary";
-    else if (matchPercent >= 60) grade = "Proficient";
-    else if (matchPercent >= 40) grade = "Developing";
+    if (matchPercent >= 85) grade = "Exemplary";
+    else if (matchPercent >= 65) grade = "Proficient";
+    else if (matchPercent >= 45) grade = "Developing";
 
     // Persona-based custom interviewer feedback text
     let feedback = "";
     if (selectedInterviewer.id === "int-1") {
-      feedback = `Excellent structuring. You scored a ${matchPercent}% match on core services. ${
+      feedback = `${difficultyMode === "Easy" ? "Splendid attempt!" : "Evaluation finalized."} You scored a ${matchPercent}% match on core architectural vocabulary. ${
         matchPercent >= 80 
           ? "Your response directly aligns with the Reliability and Security pillars of the AWS Well-Architected Framework. I liked how you layered your services."
           : `We need to flesh out your services. You missed important aspects like: ${missingKeywords.join(", ")}. Study our AWS structural guides to strengthen this response.`
@@ -452,7 +643,7 @@ Evaluate the user's response to the scenario. Provide deep Socratic architectura
       }`;
     } else {
       feedback = `Let's talk cost and impact. Match rating: ${matchPercent}%. ${
-        responseLower.includes("spot") || responseLower.includes("budget") || responseLower.includes("savings")
+        responseLower.includes("spot") || responseLower.includes("budget") || responseLower.includes("savings") || responseLower.includes("serverless")
           ? "Splendid work highlighting financial guardrails. Cost optimization requires combining on-demand scheduling with spot instances."
           : "This proposal looks expensive. Ensure you propose Spot Instances or automated instance scheduling rules to contain waste."
       }`;
