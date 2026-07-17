@@ -45,6 +45,9 @@ interface DashboardViewProps {
   syncing?: boolean;
   dailyMinutesLog?: { [dateKey: string]: number };
   streak: number;
+  redirectError?: string | null;
+  redirectSuggestedAction?: string | null;
+  redirectErrorGuide?: string | null;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -66,6 +69,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   syncing,
   dailyMinutesLog,
   streak,
+  redirectError,
+  redirectSuggestedAction,
+  redirectErrorGuide,
 }) => {
   // Calculate statistics
   const totalCards = flashcards.length;
@@ -139,6 +145,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [password, setPassword] = React.useState<string>("");
   const [isRegistering, setIsRegistering] = React.useState<boolean>(false);
   const [emailLoading, setEmailLoading] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (redirectError) {
+      setAuthError(redirectError);
+    }
+    if (redirectSuggestedAction) {
+      setAuthSuggestedAction(redirectSuggestedAction);
+    }
+    if (redirectErrorGuide) {
+      setAuthErrorGuide(redirectErrorGuide);
+    }
+  }, [redirectError, redirectSuggestedAction, redirectErrorGuide]);
 
   const [isPlayingVoice, setIsPlayingVoice] = React.useState(false);
 
@@ -397,7 +415,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
       
       {/* Cloud Integration / Progress Sync Control Center */}
-      <div className="bg-white border border-slate-200 rounded-sm p-4 sm:p-5 shadow-xs">
+      <div className={`border rounded-sm p-4 sm:p-5 transition-all ${
+        user 
+          ? 'bg-white border-slate-200 shadow-xs' 
+          : 'bg-gradient-to-r from-amber-50/30 via-white to-white border-amber-300 dark:border-amber-900/60 shadow-md shadow-amber-500/5 relative overflow-hidden ring-1 ring-amber-500/10'
+      }`}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-3 min-w-0">
             <div className={`p-2.5 rounded-sm shrink-0 ${user ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-[#FF9900]/10 text-[#FF9900] border border-[#FF9900]/20'}`}>
@@ -408,6 +430,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
             </div>
             <div className="min-w-0">
+              {!user && (
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="bg-[#FF9900]/10 text-[#FF9900] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-[2px] border border-[#FF9900]/25 animate-pulse">
+                    Sync Recommended
+                  </span>
+                  <span className="text-[10px] text-amber-600 font-extrabold hidden sm:inline">
+                    Local-only session active
+                  </span>
+                </div>
+              )}
               <h4 className="font-extrabold text-sm text-slate-800 tracking-tight leading-none uppercase">
                 {user ? "AWS Masterclass Cloud Sync Active" : "Connect AWS Cloud Study Sync"}
               </h4>
@@ -600,10 +632,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       }
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold rounded-sm transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                  className="flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#FF9900] hover:bg-amber-600 hover:scale-[1.02] active:scale-[0.98] text-white text-xs font-black rounded-sm transition-all shadow-md shadow-amber-500/15 cursor-pointer whitespace-nowrap"
                   title="Authenticate via Google Identity Services"
                 >
-                  <Key className="w-4 h-4 text-[#FF9900]" />
+                  <Key className="w-4 h-4 text-white fill-white" />
                   <span>Connect Google Account</span>
                 </button>
                 

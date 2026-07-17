@@ -48,9 +48,11 @@ import {
   logoutUser, 
   saveProgressToCloud, 
   getProgressFromCloud,
-  syncStreakToLeaderboard
+  syncStreakToLeaderboard,
+  getAuthDiagnostics,
+  FirebaseAuthError
 } from "./lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, User, getRedirectResult } from "firebase/auth";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -95,6 +97,55 @@ export default function App() {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
   const [isIframe, setIsIframe] = useState<boolean>(false);
+
+  const [redirectLoading, setRedirectLoading] = useState<boolean>(false);
+  const [redirectError, setRedirectError] = useState<string | null>(null);
+  const [redirectSuggestedAction, setRedirectSuggestedAction] = useState<string | null>(null);
+  const [redirectErrorGuide, setRedirectErrorGuide] = useState<string | null>(null);
+
+  // Check Firebase redirect result on mount
+  useEffect(() => {
+    const checkRedirect = async () => {
+      setRedirectLoading(true);
+      setRedirectError(null);
+      setRedirectSuggestedAction(null);
+      setRedirectErrorGuide(null);
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log("Redirect login successful:", result.user);
+          setUser(result.user);
+        }
+      } catch (error: any) {
+        console.error("Redirect Auth Error caught in App:", error);
+        const diagnostics = getAuthDiagnostics();
+        
+        let userMessage = "The login redirect process encountered an issue.";
+        let action = "Try opening the application in a standalone browser window instead of an iframe.";
+        let guide = "Cross-origin redirection is blocked by browser isolation standards.";
+
+        if (error.code === "auth/unauthorized-domain" || error?.message?.includes("unauthorized-domain")) {
+          userMessage = "This hosting domain is not authorized in Firebase.";
+          action = `Add "${window.location.hostname}" to the Authorized Domains list in the Firebase Console (Authentication > Settings).`;
+          guide = "Firebase blocks sign-ins originating from unlisted domain names for security.";
+        } else if (error.code === "auth/popup-blocked" || error?.message?.includes("popup-blocked")) {
+          userMessage = "The authentication popup was blocked.";
+          action = "Enable popups in your browser settings or click the button to try again.";
+          guide = "Popups are prevented by default in standard browser privacy settings.";
+        } else if (diagnostics.suggestedAction) {
+          action = diagnostics.suggestedAction;
+          guide = diagnostics.errorGuide || guide;
+        }
+
+        setRedirectError(userMessage);
+        setRedirectSuggestedAction(action);
+        setRedirectErrorGuide(guide);
+      } finally {
+        setRedirectLoading(false);
+      }
+    };
+    checkRedirect();
+  }, []);
 
   useEffect(() => {
     setIsIframe(window.self !== window.top);
@@ -523,6 +574,14 @@ export default function App() {
         </div>
       )}
 
+      {/* Redirect Auth Loading feedback */}
+      {redirectLoading && (
+        <div className="bg-amber-500/10 dark:bg-amber-500/20 border-b border-[#FF9900]/30 p-2.5 flex items-center justify-center gap-2.5 text-amber-800 dark:text-amber-400 text-xs font-bold shrink-0 animate-pulse">
+          <RefreshCw className="w-4 h-4 animate-spin text-[#FF9900]" />
+          <span>Securing cloud session with Google authentication... Verifying redirect credentials, please hold.</span>
+        </div>
+      )}
+
       {/* Iframe Notice Banner for Sign In */}
       {isIframe && !user && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-900/40 p-2 flex flex-col sm:flex-row items-center justify-center gap-2 text-amber-800 dark:text-amber-400 text-xs font-bold shrink-0 text-center animate-fade-in">
@@ -828,10 +887,13 @@ export default function App() {
               onAddStudyMinutes={handleAddStudyMinutes}
               onResetStudyMinutes={handleResetStudyMinutes}
               user={user}
-              authLoading={authLoading}
+              authLoading={authLoading || redirectLoading}
               syncing={syncing}
               dailyMinutesLog={dailyMinutesLog}
               streak={streak}
+              redirectError={redirectError}
+              redirectSuggestedAction={redirectSuggestedAction}
+              redirectErrorGuide={redirectErrorGuide}
             />
           )}
 
