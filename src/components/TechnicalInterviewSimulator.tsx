@@ -527,43 +527,92 @@ Evaluate the user's response to the scenario. Provide deep Socratic architectura
           <div className="lg:col-span-8 space-y-6">
             
             {/* Live Video Simulation Box */}
-            <div className="bg-slate-900 rounded-sm overflow-hidden border border-slate-800 shadow-lg relative aspect-video flex flex-col justify-between p-6">
+            <div className="bg-slate-900 rounded-sm border border-slate-800 shadow-lg relative min-h-[460px] sm:min-h-[500px] flex flex-col justify-between p-4 sm:p-6 overflow-hidden">
               <div className="absolute inset-0 bg-radial-gradient from-transparent to-slate-950/80 pointer-events-none"></div>
               
+              {/* Simulated Lens Focus Brackets */}
+              <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-slate-700 pointer-events-none"></div>
+              <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-slate-700 pointer-events-none"></div>
+              <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-slate-700 pointer-events-none"></div>
+              <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-slate-700 pointer-events-none"></div>
+
               {/* Header inside the video pane */}
-              <div className="flex justify-between items-start z-10">
-                <span className="flex items-center gap-1 px-2 py-0.5 bg-red-600/90 text-white font-mono text-[9px] font-extrabold rounded-sm uppercase tracking-widest animate-pulse">
+              <div className="flex justify-between items-center z-10">
+                <span className="flex items-center gap-1.5 px-2 py-1 bg-red-600/90 text-white font-mono text-[9px] font-extrabold rounded-sm uppercase tracking-widest animate-pulse">
                   <span className="w-1.5 h-1.5 rounded-full bg-white inline-block"></span>
                   Recruiter Live Cam
                 </span>
-                <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-1 rounded-xs font-mono">
-                  Codec: H.264 • 1080p 60fps
-                </span>
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex items-center gap-1 bg-slate-950/80 px-2 py-1 rounded-xs border border-slate-800/80 text-[8px] font-mono text-emerald-400">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>HD 1080P • FEED SECURE</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 bg-slate-800/80 px-2 py-1 rounded-xs font-mono">
+                    Codec: H.264 • 60fps
+                  </span>
+                </div>
               </div>
 
               {/* Centered Avatar and Name of interviewer */}
-              <div className="flex flex-col items-center justify-center py-10 z-10 text-center space-y-4">
-                <div className={`w-24 h-24 ${selectedInterviewer.avatarBg} rounded-full flex items-center justify-center text-4xl shadow-md border-4 border-slate-800 ring-2 ring-[#FF9900]/30 relative`}>
-                  {selectedInterviewer.emoji}
-                  {isRecording && (
-                    <span className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#FF9900] text-slate-900 text-[10px] rounded-full flex items-center justify-center animate-bounce font-bold">
-                      <Mic className="w-3 h-3" />
-                    </span>
-                  )}
+              <div className="flex flex-col items-center justify-center py-6 sm:py-8 z-10 text-center space-y-4">
+                <div className="relative">
+                  {/* Glowing webcam outer active ring */}
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#FF9900]/20 to-blue-500/20 blur-md animate-pulse"></div>
+                  
+                  <div className={`w-24 h-24 ${selectedInterviewer.avatarBg} rounded-full flex items-center justify-center text-4xl shadow-md border-4 border-slate-800 ring-4 ring-[#FF9900]/20 relative z-10`}>
+                    {selectedInterviewer.emoji}
+                    {isRecording && (
+                      <span className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#FF9900] text-slate-900 rounded-full flex items-center justify-center animate-bounce font-bold border-2 border-slate-900 shadow-md">
+                        <Mic className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Webcam On LED dot */}
+                  <span className="absolute top-0.5 right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 z-20" title="Webcam sensor online" />
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-white text-base tracking-tight">{selectedInterviewer.name}</h3>
-                  <p className="text-[#FF9900] text-xs font-bold uppercase tracking-wider">{selectedInterviewer.role}</p>
+                
+                <div className="space-y-1">
+                  <h3 className="font-extrabold text-white text-base tracking-tight flex items-center justify-center gap-1.5">
+                    {selectedInterviewer.name}
+                    <span className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded-[2px] uppercase font-black tracking-wider">
+                      Interviewer
+                    </span>
+                  </h3>
+                  <p className="text-[#FF9900] text-xs font-black uppercase tracking-widest">{selectedInterviewer.role}</p>
+                  
+                  <div className="flex items-center justify-center gap-2 text-[9px] text-slate-400 font-mono">
+                    <span>Focus: <span className="text-slate-200 font-bold">{selectedInterviewer.focusArea}</span></span>
+                    <span>•</span>
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-emerald-500 inline-block"></span>
+                      Active Session
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* Bottom Interviewer Speech Prompt */}
-              <div className="bg-slate-950/90 border border-slate-800 p-4 rounded-sm z-10">
-                <div className="flex items-start gap-2.5">
-                  <span className="text-xl shrink-0">💬</span>
-                  <div>
-                    <span className="text-[9px] uppercase font-black text-slate-500 tracking-wider">Active Question Prompt</span>
-                    <p className="text-xs md:text-sm text-slate-100 font-bold leading-relaxed italic">
+              <div className="bg-slate-950/95 border border-slate-800 p-4 rounded-sm z-10 shadow-xl ring-1 ring-white/5">
+                <div className="flex items-start gap-3">
+                  <div className="flex flex-col items-center gap-1.5 shrink-0">
+                    <span className="text-xl">💬</span>
+                    {/* Live Equalizer indicator */}
+                    <div className="flex gap-0.5 items-end h-2 w-5 justify-center">
+                      <span className="w-0.5 bg-[#FF9900] rounded-full animate-pulse h-2" />
+                      <span className="w-0.5 bg-[#FF9900] rounded-full animate-pulse h-3.5" style={{ animationDelay: "150ms" }} />
+                      <span className="w-0.5 bg-[#FF9900] rounded-full animate-pulse h-1.5" style={{ animationDelay: "300ms" }} />
+                      <span className="w-0.5 bg-[#FF9900] rounded-full animate-pulse h-2.5" style={{ animationDelay: "450ms" }} />
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-[9px] uppercase font-black text-slate-500 tracking-wider">Active Recruiter Question</span>
+                      <span className="text-[8px] font-mono text-[#FF9900] uppercase tracking-widest bg-[#FF9900]/10 px-1.5 py-0.5 rounded-[2px] border border-[#FF9900]/20">
+                        {selectedScenario.difficulty}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-100 font-bold leading-relaxed italic pr-1">
                       "{selectedScenario.question}"
                     </p>
                   </div>

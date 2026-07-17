@@ -162,7 +162,7 @@ export default function App() {
     };
   }, []);
 
-  // Listen to Firebase Auth state and setup API-based load
+  // Listen to Firebase Auth state and setup API-based load & merge
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setAuthLoading(true);
@@ -172,26 +172,77 @@ export default function App() {
         setSyncing(true);
         try {
           const data = await getProgressFromCloud(currentUser.uid);
-          if (data) {
-            if (data.totalStudyMinutes !== undefined) setTotalStudyMinutes(data.totalStudyMinutes);
-            if (data.todayStudyMinutes !== undefined) setTodayStudyMinutes(data.todayStudyMinutes);
-            if (data.dailyStudyGoal !== undefined) setDailyStudyGoal(data.dailyStudyGoal);
-            if (data.studyHistory !== undefined) setStudyHistory(data.studyHistory);
-            if (data.quizHistory !== undefined) setQuizHistory(data.quizHistory);
-            if (data.dailyMinutesLog !== undefined) setDailyMinutesLog(data.dailyMinutesLog);
-          } else {
-            // Seed initial mock data if no record exists
-            const log: { [dateKey: string]: number } = {};
+          
+          // Get local guest state values
+          const localHistory = getLocalState("studyHistory", {} as { [key: string]: "known" | "review" | null });
+          const localQuiz = getLocalState("quizHistory", {} as { [key: string]: boolean });
+          const localGoal = getLocalState("dailyStudyGoal", 30);
+          const localToday = getLocalState("todayStudyMinutes", 0);
+          const localTotal = getLocalState("totalStudyMinutes", 0);
+          const localMinutesLog = getLocalState("dailyMinutesLog", {} as { [dateKey: string]: number });
+
+          // Reconcile and merge guest memory with remote cloud data
+          const mergedHistory = { ...(data?.studyHistory || {}) } as { [key: string]: "known" | "review" | null };
+          Object.keys(localHistory).forEach((key) => {
+            if (localHistory[key]) {
+              mergedHistory[key] = localHistory[key];
+            }
+          });
+
+          const mergedQuiz = { ...(data?.quizHistory || {}) } as { [key: string]: boolean };
+          Object.keys(localQuiz).forEach((key) => {
+            if (localQuiz[key] !== undefined) {
+              mergedQuiz[key] = localQuiz[key] || mergedQuiz[key];
+            }
+          });
+
+          const mergedGoal = data?.dailyStudyGoal !== undefined ? data.dailyStudyGoal : localGoal;
+          const mergedToday = data?.todayStudyMinutes !== undefined ? Math.max(data.todayStudyMinutes, localToday) : localToday;
+          const mergedTotal = data?.totalStudyMinutes !== undefined ? Math.max(data.totalStudyMinutes, localTotal) : localTotal;
+
+          const mergedMinutesLog = { ...(data?.dailyMinutesLog || {}) } as { [dateKey: string]: number };
+          Object.keys(localMinutesLog).forEach((key) => {
+            mergedMinutesLog[key] = Math.max(mergedMinutesLog[key] || 0, localMinutesLog[key] || 0);
+          });
+
+          // Seed default logs if both cloud and guest history are completely empty
+          if (!data && Object.keys(mergedMinutesLog).length === 0) {
             for (let i = 6; i > 0; i--) {
               const d = new Date();
               d.setDate(d.getDate() - i);
               const key = d.toISOString().split('T')[0];
-              log[key] = Math.floor(Math.random() * 25) + 15;
+              mergedMinutesLog[key] = Math.floor(Math.random() * 25) + 15;
             }
-            setDailyMinutesLog(log);
           }
+
+          // Update React states
+          setStudyHistory(mergedHistory);
+          setQuizHistory(mergedQuiz);
+          setDailyStudyGoal(mergedGoal);
+          setTodayStudyMinutes(mergedToday);
+          setTotalStudyMinutes(mergedTotal);
+          setDailyMinutesLog(mergedMinutesLog);
+
+          // Save the unified dataset to Postgres Cloud immediately
+          await saveProgressToCloud(currentUser.uid, {
+            totalStudyMinutes: mergedTotal,
+            todayStudyMinutes: mergedToday,
+            dailyStudyGoal: mergedGoal,
+            studyHistory: mergedHistory,
+            quizHistory: mergedQuiz,
+            dailyMinutesLog: mergedMinutesLog
+          });
+
+          // Clean up the guest keys to keep browser local storage tidy
+          localStorage.removeItem("aws_guest_studyHistory_v1");
+          localStorage.removeItem("aws_guest_quizHistory_v1");
+          localStorage.removeItem("aws_guest_dailyStudyGoal_v1");
+          localStorage.removeItem("aws_guest_todayStudyMinutes_v1");
+          localStorage.removeItem("aws_guest_totalStudyMinutes_v1");
+          localStorage.removeItem("aws_guest_dailyMinutesLog_v1");
+
         } catch (error) {
-          console.error("Postgres load error:", error);
+          console.error("Postgres load & merge error:", error);
         } finally {
           setSyncing(false);
           setHasLoadedCloudData(true);
@@ -231,13 +282,23 @@ export default function App() {
     }
   };
 
-  // Cloud-first state (no localStorage for data)
-  const [studyHistory, setStudyHistory] = useState<{ [key: string]: "known" | "review" | null }>({});
-  const [quizHistory, setQuizHistory] = useState<{ [key: string]: boolean }>({});
-  const [dailyStudyGoal, setDailyStudyGoal] = useState<number>(30);
-  const [todayStudyMinutes, setTodayStudyMinutes] = useState<number>(0);
-  const [totalStudyMinutes, setTotalStudyMinutes] = useState<number>(0);
-  const [dailyMinutesLog, setDailyMinutesLog] = useState<{ [dateKey: string]: number }>({});
+  // Helper to read state from local storage for unauthenticated guests
+  const getLocalState = <T,>(key: string, defaultValue: T): T => {
+    try {
+      const item = localStorage.getItem(`aws_guest_${key}_v1`);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  };
+
+  // State with Local Guest fallback persistence
+  const [studyHistory, setStudyHistory] = useState<{ [key: string]: "known" | "review" | null }>(() => getLocalState("studyHistory", {}));
+  const [quizHistory, setQuizHistory] = useState<{ [key: string]: boolean }>(() => getLocalState("quizHistory", {}));
+  const [dailyStudyGoal, setDailyStudyGoal] = useState<number>(() => getLocalState("dailyStudyGoal", 30));
+  const [todayStudyMinutes, setTodayStudyMinutes] = useState<number>(() => getLocalState("todayStudyMinutes", 0));
+  const [totalStudyMinutes, setTotalStudyMinutes] = useState<number>(() => getLocalState("totalStudyMinutes", 0));
+  const [dailyMinutesLog, setDailyMinutesLog] = useState<{ [dateKey: string]: number }>(() => getLocalState("dailyMinutesLog", {}));
   const [streak, setStreak] = useState<number>(0);
   
   // Flag to prevent overwriting cloud state with empty local state on first load
@@ -322,6 +383,22 @@ export default function App() {
       console.error("Could not download companion:", err);
     }
   };
+
+  // Auto-save changes to localStorage for guests when offline/not logged in
+  useEffect(() => {
+    if (!user && hasLoadedCloudData) {
+      try {
+        localStorage.setItem("aws_guest_studyHistory_v1", JSON.stringify(studyHistory));
+        localStorage.setItem("aws_guest_quizHistory_v1", JSON.stringify(quizHistory));
+        localStorage.setItem("aws_guest_dailyStudyGoal_v1", JSON.stringify(dailyStudyGoal));
+        localStorage.setItem("aws_guest_todayStudyMinutes_v1", JSON.stringify(todayStudyMinutes));
+        localStorage.setItem("aws_guest_totalStudyMinutes_v1", JSON.stringify(totalStudyMinutes));
+        localStorage.setItem("aws_guest_dailyMinutesLog_v1", JSON.stringify(dailyMinutesLog));
+      } catch (err) {
+        console.error("Local storage save error:", err);
+      }
+    }
+  }, [user, hasLoadedCloudData, totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog]);
 
   // Auto-save changes to cloud when state changes (debounced)
   useEffect(() => {
@@ -943,6 +1020,79 @@ export default function App() {
           )}
 
         </main>
+      </div>
+      
+      {/* Mobile Bottom Navigation Dock (Top of the Footer) */}
+      <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 h-14 shrink-0 flex items-center justify-around px-2 z-20 shadow-lg">
+        <button 
+          onClick={() => handleTabChange("dashboard")}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+            activeTab === "dashboard" 
+              ? "text-[#FF9900]" 
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+          title="Dashboard"
+        >
+          <Layers className="w-5 h-5" />
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Dash</span>
+          {activeTab === "dashboard" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
+        </button>
+        
+        <button 
+          onClick={() => handleTabChange("professor")}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+            activeTab === "professor" 
+              ? "text-[#FF9900]" 
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+          title="Socratic Professor"
+        >
+          <Bot className="w-5 h-5 text-[#FF9900]" />
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Socratic</span>
+          {activeTab === "professor" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
+        </button>
+        
+        <button 
+          onClick={() => handleTabChange("flashcards")}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+            activeTab === "flashcards" 
+              ? "text-amber-500" 
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+          title="Flashcards"
+        >
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Cards</span>
+          {activeTab === "flashcards" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-amber-500 rounded-full" />}
+        </button>
+
+        <button 
+          onClick={() => handleTabChange("matching")}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+            activeTab === "matching" 
+              ? "text-[#FF9900]" 
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+          title="Scenario Game"
+        >
+          <Zap className="w-5 h-5" />
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Game</span>
+          {activeTab === "matching" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
+        </button>
+
+        <button 
+          onClick={() => handleTabChange("simulator")}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+            activeTab === "simulator" 
+              ? "text-[#FF9900]" 
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+          title="Exam Simulator"
+        >
+          <AlertTriangle className="w-5 h-5" />
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Exam</span>
+          {activeTab === "simulator" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
+        </button>
       </div>
 
       {/* Footer Meta bar */}

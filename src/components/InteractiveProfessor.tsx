@@ -424,6 +424,24 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
           {/* CHAT BUBBLE CONSOLE VIEW */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
             
+            {/* Session Status Banner */}
+            <div className={`p-2.5 rounded-sm border text-[10px] flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+              user 
+                ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-800' 
+                : 'bg-amber-500/5 border-amber-500/10 text-amber-800'
+            }`}>
+              <div className="flex items-center gap-1.5 font-extrabold uppercase tracking-widest shrink-0">
+                <span className={`w-2 h-2 rounded-full ${user ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                {user ? "Cloud Sync Secured" : "Guest Sandbox active"}
+              </div>
+              <span className="font-semibold text-slate-500 dark:text-slate-400 text-[10px] leading-tight">
+                {user 
+                  ? "Your conversational history with Professor Cloud is fully preserved in Cloud Run storage." 
+                  : "Conversations are kept in local storage. Connect a Google Account on the dashboard to save sessions permanently."
+                }
+              </span>
+            </div>
+            
             {messages.map((msg) => (
               <div 
                 key={msg.id} 
