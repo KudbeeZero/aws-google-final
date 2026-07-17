@@ -7,7 +7,9 @@ import {
   signOut, 
   onAuthStateChanged,
   User,
-  signInAnonymously
+  signInAnonymously,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -27,12 +29,17 @@ export const googleProvider = new GoogleAuthProvider();
 
 // Google login helper
 export const loginWithGoogle = async () => {
+  const isIframe = typeof window !== "undefined" && window.self !== window.top;
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
-    console.error("Firebase Auth sign in popup error, trying redirect:", error);
-    // Fallback to redirect if popup is blocked
+    console.error("Firebase Auth sign in popup error:", error);
+    if (isIframe) {
+      // Do not fallback to redirect inside an iframe, because Google blocks iframe rendering.
+      throw new Error("Google Sign-In is restricted inside preview iframes. Please open the app in a new tab.");
+    }
+    // Fallback to redirect if popup is blocked and we are not in an iframe
     try {
       await signInWithRedirect(auth, googleProvider);
     } catch (redirectError) {
@@ -49,6 +56,28 @@ export const loginAnonymously = async () => {
     return result.user;
   } catch (error) {
     console.error("Firebase Anonymous login error:", error);
+    throw error;
+  }
+};
+
+// Email registration helper
+export const registerWithEmail = async (email: string, password: string) => {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    return result.user;
+  } catch (error) {
+    console.error("Firebase Email registration error:", error);
+    throw error;
+  }
+};
+
+// Email login helper
+export const loginWithEmail = async (email: string, password: string) => {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    return result.user;
+  } catch (error) {
+    console.error("Firebase Email login error:", error);
     throw error;
   }
 };
@@ -75,11 +104,22 @@ export interface CloudProgress {
 
 export const saveProgressToCloud = async (userId: string, progress: CloudProgress) => {
   try {
-    const userDocRef = doc(db, "users", userId, "profile", "data");
-    await setDoc(userDocRef, {
-      ...progress,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      console.warn("No auth token available for saveProgressToCloud");
+      return;
+    }
+    const response = await fetch("/api/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify(progress)
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   } catch (error) {
     console.error("Failed to save progress to cloud:", error);
   }
@@ -87,18 +127,18 @@ export const saveProgressToCloud = async (userId: string, progress: CloudProgres
 
 export const getProgressFromCloud = async (userId: string): Promise<CloudProgress | null> => {
   try {
-    const userDocRef = doc(db, "users", userId, "profile", "data");
-    const docSnap = await getDoc(userDocRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        totalStudyMinutes: data.totalStudyMinutes || 0,
-        todayStudyMinutes: data.todayStudyMinutes || 0,
-        dailyStudyGoal: data.dailyStudyGoal || 15,
-        studyHistory: data.studyHistory || {},
-        quizHistory: data.quizHistory || {},
-        dailyMinutesLog: data.dailyMinutesLog || undefined
-      };
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      console.warn("No auth token available for getProgressFromCloud");
+      return null;
+    }
+    const response = await fetch("/api/progress", {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+    if (response.ok) {
+      return await response.json();
     }
     return null;
   } catch (error) {
@@ -116,8 +156,27 @@ export interface InterviewSessionData {
 
 export const saveInterviewSessionToCloud = async (userId: string, sessionId: string, sessionData: InterviewSessionData) => {
   try {
-    const sessionDocRef = doc(db, "users", userId, "interviewSessions", sessionId);
-    await setDoc(sessionDocRef, sessionData);
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      console.warn("No auth token available for saveInterviewSessionToCloud");
+      return;
+    }
+    const response = await fetch("/api/interview-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        sessionId,
+        scenarioId: sessionData.scenarioId,
+        transcript: sessionData.transcript,
+        scorecard: sessionData.scorecard,
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   } catch (error) {
     console.error("Failed to save interview session to cloud:", error);
   }

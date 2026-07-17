@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { motion } from "motion/react";
-import { Award, CheckCircle, Flame, ShieldAlert, Sparkles, BookOpen, Layers, Trophy, AlertTriangle, TrendingUp, ShieldCheck, Bot, HelpCircle, Zap, Lock, Cloud, CloudLightning, Key, UserCheck, RefreshCw, Volume2, VolumeX } from "lucide-react";
+import { Award, CheckCircle, Flame, ShieldAlert, Sparkles, BookOpen, Layers, Trophy, AlertTriangle, TrendingUp, ShieldCheck, Bot, HelpCircle, Zap, Lock, Cloud, CloudLightning, Key, UserCheck, RefreshCw, Volume2, VolumeX, ExternalLink, Mail } from "lucide-react";
 import { DomainData, Flashcard, Achievement } from "../types";
 import { FirstTimeTools } from "./FirstTimeTools";
 import { FocusBuddy } from "./FocusBuddy";
@@ -8,7 +8,7 @@ import { DailyGoalTracker } from "./DailyGoalTracker";
 import { WeeklyStudyChart } from "./WeeklyStudyChart";
 import { MonthlyHeatmap } from "./MonthlyHeatmap";
 import { Achievements } from "./Achievements";
-import { loginWithGoogle, loginAnonymously, logoutUser } from "../lib/firebase";
+import { loginWithGoogle, loginAnonymously, logoutUser, registerWithEmail, loginWithEmail } from "../lib/firebase";
 
 const AchievementIcon: React.FC<{ name: string; unlocked: boolean }> = ({ name, unlocked }) => {
   const baseClass = `w-5 h-5 ${unlocked ? "text-[#FF9900]" : "text-slate-400"}`;
@@ -43,6 +43,7 @@ interface DashboardViewProps {
   authLoading?: boolean;
   syncing?: boolean;
   dailyMinutesLog?: { [dateKey: string]: number };
+  streak: number;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -63,6 +64,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   authLoading,
   syncing,
   dailyMinutesLog,
+  streak,
 }) => {
   // Calculate statistics
   const totalCards = flashcards.length;
@@ -128,35 +130,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }
 
   const [authError, setAuthError] = React.useState<string | null>(null);
-
-  // Streak calculation
-  const streak = useMemo(() => {
-    if (!dailyMinutesLog) return 0;
-    let currentStreak = 0;
-    let isStreakBroken = false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
-      
-      const mins = dailyMinutesLog[dateStr] || 0;
-      const metGoal = mins >= dailyStudyGoal && dailyStudyGoal > 0;
-      
-      if (i === 0) {
-        if (metGoal) currentStreak++;
-      } else {
-        if (metGoal && !isStreakBroken) {
-          currentStreak++;
-        } else if (!metGoal) {
-          isStreakBroken = true;
-        }
-      }
-    }
-    return currentStreak;
-  }, [dailyMinutesLog, dailyStudyGoal]);
+  const [showEmailAuth, setShowEmailAuth] = React.useState<boolean>(false);
+  const [email, setEmail] = React.useState<string>("");
+  const [password, setPassword] = React.useState<string>("");
+  const [isRegistering, setIsRegistering] = React.useState<boolean>(false);
+  const [emailLoading, setEmailLoading] = React.useState<boolean>(false);
 
   const [isPlayingVoice, setIsPlayingVoice] = React.useState(false);
 
@@ -344,6 +322,76 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       
+      {/* DashboardHeader with Streak and Greetings */}
+      <div id="dashboard-header" className="bg-gradient-to-r from-amber-500 via-[#FF9900] to-orange-600 rounded-sm p-5 sm:p-6 text-white shadow-md relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Abstract background blobs for premium aesthetic */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-2xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-16 -mb-16 blur-xl pointer-events-none" />
+        
+        <div className="relative z-10 text-center md:text-left">
+          <span className="bg-white/20 text-white text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-[2px] tracking-widest leading-none">
+            AWS Certified Cloud Practitioner (CLF-C02)
+          </span>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight mt-2 text-white">
+            AWS Masterclass Study Dashboard
+          </h1>
+          <p className="text-xs text-white/90 leading-normal mt-1 max-w-xl">
+            Welcome back to your ultimate interactive training console. Build muscle memory through active recall, tackle challenging exam simulations, and sharpen your cloud architect reasoning.
+          </p>
+        </div>
+
+        {/* Flame Badge / Streak Indicator section */}
+        <div className="relative z-10 flex items-center gap-3 bg-white/15 backdrop-blur-xs border border-white/25 px-4 py-3 rounded-sm shadow-inner shrink-0 w-full sm:w-auto justify-center sm:justify-start">
+          <div className="relative flex items-center justify-center">
+            {streak >= 3 ? (
+              <motion.div
+                animate={{
+                  scale: [1, 1.12, 1],
+                  rotate: [0, 4, -4, 0],
+                }}
+                transition={{
+                  duration: 1.8,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                className="relative"
+              >
+                <Flame className={`w-10 h-10 drop-shadow-[0_0_8px_rgba(255,255,255,0.7)] ${streak >= 7 ? "text-rose-200 fill-rose-300" : "text-amber-200 fill-amber-300"}`} />
+                {/* Visual sparkles or pulse rings for 3/7 day streaks */}
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                </span>
+              </motion.div>
+            ) : (
+              <Flame className="w-10 h-10 text-white/45" />
+            )}
+          </div>
+          
+          <div className="flex flex-col">
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/70 leading-none">
+              Daily Study Streak
+            </span>
+            <span className="text-xl font-black mt-1 text-white tracking-tight flex items-center gap-2">
+              {streak} {streak === 1 ? "Day" : "Days"}
+              {streak >= 7 ? (
+                <span className="bg-rose-500/30 text-white border border-rose-500/50 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-[2px] tracking-wider animate-pulse shrink-0">
+                  7-Day Supernova! 🚀
+                </span>
+              ) : streak >= 3 ? (
+                <span className="bg-amber-500/30 text-white border border-amber-500/50 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-[2px] tracking-wider shrink-0">
+                  3-Day Burner! 🔥
+                </span>
+              ) : (
+                <span className="text-white/60 text-xs font-normal shrink-0">
+                  (Keep going!)
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+      </div>
+      
       {/* Cloud Integration / Progress Sync Control Center */}
       <div className="bg-white border border-slate-200 rounded-sm p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -395,8 +443,136 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Sign Out
                 </button>
               </div>
+            ) : showEmailAuth ? (
+              <div className="flex flex-col gap-3 w-full max-w-sm bg-slate-50 dark:bg-slate-900/40 p-4 rounded-sm border border-slate-200 dark:border-slate-800 animate-fade-in sm:self-center shrink-0">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2 mb-1">
+                  <h5 className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5 text-[#FF9900]" />
+                    <span>{isRegistering ? "Create AWS Study Account" : "Sign In with Email"}</span>
+                  </h5>
+                  <button 
+                    onClick={() => {
+                      setShowEmailAuth(false);
+                      setAuthError(null);
+                    }}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold transition-all text-xs cursor-pointer px-1 py-0.5"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Email Address</label>
+                    <input 
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="e.g. learner@domain.com"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-sm text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#FF9900] transition-colors"
+                      disabled={emailLoading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Password (min 6 chars)</label>
+                    <input 
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-sm text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#FF9900] transition-colors"
+                      disabled={emailLoading}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 mt-2">
+                  <button
+                    onClick={async () => {
+                      if (!email || !password) {
+                        setAuthError("Please fill in both email and password fields.");
+                        return;
+                      }
+                      if (password.length < 6) {
+                        setAuthError("Password must be at least 6 characters.");
+                        return;
+                      }
+                      setAuthError(null);
+                      setEmailLoading(true);
+                      try {
+                        if (isRegistering) {
+                          await registerWithEmail(email, password);
+                        } else {
+                          await loginWithEmail(email, password);
+                        }
+                        setShowEmailAuth(false);
+                        setEmail("");
+                        setPassword("");
+                      } catch (e: any) {
+                        console.error("Email auth failed:", e);
+                        if (e?.code === 'auth/user-not-found' || e?.message?.includes('user-not-found')) {
+                          setAuthError("No account found with this email. Toggle 'Create an Account' below to sign up!");
+                        } else if (e?.code === 'auth/wrong-password' || e?.message?.includes('wrong-password') || e?.message?.includes('invalid-credential')) {
+                          setAuthError("Incorrect credentials. Please check your email/password and try again.");
+                        } else if (e?.code === 'auth/email-already-in-use' || e?.message?.includes('email-already-in-use')) {
+                          setAuthError("This email is already registered. Please sign in instead.");
+                        } else if (e?.code === 'auth/invalid-email' || e?.message?.includes('invalid-email')) {
+                          setAuthError("Please enter a valid email address.");
+                        } else if (e?.code === 'auth/weak-password' || e?.message?.includes('weak-password')) {
+                          setAuthError("Password is too weak. Please use at least 6 characters.");
+                        } else if (e?.code === 'auth/configuration-not-found' || e?.message?.includes('configuration-not-found')) {
+                          setAuthError("Email/Password authentication needs to be enabled in the Firebase Console under Authentication -> Sign-in Method.");
+                        } else {
+                          setAuthError(e?.message || "Authentication failed. Please verify your credentials.");
+                        }
+                      } finally {
+                        setEmailLoading(false);
+                      }
+                    }}
+                    disabled={emailLoading}
+                    className="w-full py-1.5 bg-[#FF9900] hover:bg-amber-600 disabled:bg-amber-400 text-white text-xs font-extrabold rounded-sm transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    {emailLoading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <span>{isRegistering ? "Create AWS Student Account" : "Sign In with Email"}</span>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-bold px-0.5">
+                    <span>
+                      {isRegistering ? "Already have an account?" : "Need a custom login?"}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setIsRegistering(!isRegistering);
+                        setAuthError(null);
+                      }}
+                      disabled={emailLoading}
+                      className="text-[#FF9900] hover:text-amber-600 transition-colors cursor-pointer font-bold underline decoration-dotted"
+                    >
+                      {isRegistering ? "Sign In Instead" : "Create an Account"}
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : (
-              <div className="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
+              <div className="flex flex-col xs:flex-row flex-wrap gap-2 w-full sm:w-auto items-center justify-center sm:justify-start">
+                {typeof window !== "undefined" && window.self !== window.top && (
+                  <a
+                    href={window.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold rounded-sm transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                    title="Open application in a standalone tab to enable Google Sign-In"
+                  >
+                    <ExternalLink className="w-4 h-4 text-white" />
+                    <span>Open in New Tab</span>
+                  </a>
+                )}
                 <button
                   onClick={async () => {
                     try {
@@ -404,7 +580,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       await loginWithGoogle();
                     } catch (e: any) {
                       console.error("Google Auth failed:", e);
-                      setAuthError("Google Sign-In was closed or blocked. If you are inside an iframe, please click the 'Open App' button in the toolbar to run in a standalone tab and sign in successfully.");
+                      setAuthError("Google Sign-In was closed or blocked. If you are inside an iframe, please use the 'Open in New Tab' button to run in a standalone tab and sign in successfully.");
                     }
                   }}
                   className="flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold rounded-sm transition-all shadow-sm cursor-pointer whitespace-nowrap"
@@ -413,6 +589,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <Key className="w-4 h-4 text-[#FF9900]" />
                   <span>Connect Google Account</span>
                 </button>
+                
+                <button
+                  onClick={() => {
+                    setAuthError(null);
+                    setShowEmailAuth(true);
+                    setIsRegistering(false);
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-sm transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                  title="Authenticate via traditional Email and Password"
+                >
+                  <Mail className="w-4 h-4 text-sky-500" />
+                  <span>Email Sign-In</span>
+                </button>
+
                 <button
                   onClick={async () => {
                     try {
@@ -427,7 +617,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       }
                     }
                   }}
-                  className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-sm transition-all text-center cursor-pointer whitespace-nowrap"
+                  className="px-3 py-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-350 text-xs font-bold rounded-sm transition-all text-center cursor-pointer whitespace-nowrap"
                   title="Sign in with a temporary guest account"
                 >
                   Guest Sync

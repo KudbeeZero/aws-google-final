@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { GoogleGenAI } from "@google/genai";
 import Markdown from "react-markdown";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { getChatHistoryFromCloud, saveChatHistoryToCloud } from "../lib/db-client.js";
 import { 
   Bot, 
   Send, 
@@ -85,16 +84,19 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     return (metaEnv?.VITE_GEMINI_API_KEY as string) || "";
   });
 
-  // Load chat history from Firestore or localStorage
+  // Load chat history from Postgres or localStorage
   useEffect(() => {
     if (user) {
-      const chatDocRef = doc(db, "users", user.uid, "professor_chat", "history");
-      const unsubscribe = onSnapshot(chatDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setMessages(docSnap.data().messages || [INITIAL_WELCOME]);
+      getChatHistoryFromCloud().then((history) => {
+        if (history && history.length > 0) {
+          setMessages(history);
+        } else {
+          setMessages([INITIAL_WELCOME]);
         }
+      }).catch((e) => {
+        console.error("Failed to load chat history from Postgres:", e);
+        setMessages([INITIAL_WELCOME]);
       });
-      return () => unsubscribe();
     } else {
       const savedChat = localStorage.getItem("aws_professor_chat_history_v1");
       if (savedChat) {
@@ -107,12 +109,11 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     }
   }, [user]);
 
-  // Save chat history to Firestore or localStorage
+  // Save chat history to Postgres or localStorage
   const saveHistory = async (newMessages: ChatMessage[]) => {
     setMessages(newMessages);
     if (user) {
-      const chatDocRef = doc(db, "users", user.uid, "professor_chat", "history");
-      await setDoc(chatDocRef, { messages: newMessages }, { merge: true });
+      await saveChatHistoryToCloud(newMessages);
     } else {
       localStorage.setItem("aws_professor_chat_history_v1", JSON.stringify(newMessages));
     }

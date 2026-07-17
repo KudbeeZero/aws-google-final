@@ -26,8 +26,8 @@ import {
   Loader2,
   HelpCircle
 } from "lucide-react";
-import { auth, db, saveInterviewSessionToCloud } from "../lib/firebase";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { auth, saveInterviewSessionToCloud } from "../lib/firebase";
+import { getRoadmapFromCloud, saveRoadmapToCloud } from "../lib/db-client";
 
 interface Interviewer {
   id: string;
@@ -255,13 +255,16 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
 
   useEffect(() => {
     if (user) {
-      const roadmapDocRef = doc(db, "users", user.uid, "roadmap", "items");
-      const unsubscribe = onSnapshot(roadmapDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setRoadmapItems(docSnap.data().items || INITIAL_ROADMAP_ITEMS);
+      getRoadmapFromCloud().then((items) => {
+        if (items) {
+          setRoadmapItems(items);
+        } else {
+          setRoadmapItems(INITIAL_ROADMAP_ITEMS);
         }
+      }).catch((e) => {
+        console.error("Failed to load roadmap:", e);
+        setRoadmapItems(INITIAL_ROADMAP_ITEMS);
       });
-      return () => unsubscribe();
     } else {
       const saved = localStorage.getItem("aws_roadmap_items_v1");
       if (saved) {
@@ -296,8 +299,7 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
     setRoadmapItems(newItems);
     
     if (user) {
-      const roadmapDocRef = doc(db, "users", user.uid, "roadmap", "items");
-      await setDoc(roadmapDocRef, { items: newItems }, { merge: true });
+      await saveRoadmapToCloud(newItems);
     } else {
       localStorage.setItem("aws_roadmap_items_v1", JSON.stringify(newItems));
     }

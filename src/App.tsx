@@ -38,7 +38,8 @@ import {
   CloudLightning,
   RefreshCw,
   Sun,
-  Moon
+  Moon,
+  ExternalLink
 } from "lucide-react";
 import { 
   auth, 
@@ -47,10 +48,8 @@ import {
   logoutUser, 
   saveProgressToCloud, 
   getProgressFromCloud,
-  db
 } from "./lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -94,6 +93,11 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+  const [isIframe, setIsIframe] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsIframe(window.self !== window.top);
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -106,23 +110,17 @@ export default function App() {
     };
   }, []);
 
-  // Listen to Firebase Auth state and setup onSnapshot
+  // Listen to Firebase Auth state and setup API-based load
   useEffect(() => {
-    let unsubscribeSnapshot: (() => void) | null = null;
-    
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setAuthLoading(true);
       if (currentUser) {
         setUser(currentUser);
-        // Load user's remote cloud progress in real-time
+        // Load user's remote cloud progress from Postgres database
         setSyncing(true);
-        const userDocRef = doc(db, "users", currentUser.uid, "profile", "data");
-        
-        unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
-          setSyncing(false);
-          setHasLoadedCloudData(true);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
+        try {
+          const data = await getProgressFromCloud(currentUser.uid);
+          if (data) {
             if (data.totalStudyMinutes !== undefined) setTotalStudyMinutes(data.totalStudyMinutes);
             if (data.todayStudyMinutes !== undefined) setTodayStudyMinutes(data.todayStudyMinutes);
             if (data.dailyStudyGoal !== undefined) setDailyStudyGoal(data.dailyStudyGoal);
@@ -130,7 +128,7 @@ export default function App() {
             if (data.quizHistory !== undefined) setQuizHistory(data.quizHistory);
             if (data.dailyMinutesLog !== undefined) setDailyMinutesLog(data.dailyMinutesLog);
           } else {
-            // Seed initial mock data if no document exists
+            // Seed initial mock data if no record exists
             const log: { [dateKey: string]: number } = {};
             for (let i = 6; i > 0; i--) {
               const d = new Date();
@@ -140,21 +138,20 @@ export default function App() {
             }
             setDailyMinutesLog(log);
           }
-        }, (error) => {
-          console.error("Firebase onSnapshot error:", error);
+        } catch (error) {
+          console.error("Postgres load error:", error);
+        } finally {
           setSyncing(false);
-          setHasLoadedCloudData(true); // Treat error as loaded to allow local interaction if needed
-        });
+          setHasLoadedCloudData(true);
+        }
       } else {
         setUser(null);
         setHasLoadedCloudData(true);
-        if (unsubscribeSnapshot) unsubscribeSnapshot();
       }
       setAuthLoading(false);
     });
     return () => {
       unsubscribeAuth();
-      if (unsubscribeSnapshot) unsubscribeSnapshot();
     };
   }, []);
 
@@ -189,9 +186,60 @@ export default function App() {
   const [todayStudyMinutes, setTodayStudyMinutes] = useState<number>(0);
   const [totalStudyMinutes, setTotalStudyMinutes] = useState<number>(0);
   const [dailyMinutesLog, setDailyMinutesLog] = useState<{ [dateKey: string]: number }>({});
+  const [streak, setStreak] = useState<number>(0);
   
   // Flag to prevent overwriting cloud state with empty local state on first load
   const [hasLoadedCloudData, setHasLoadedCloudData] = useState<boolean>(false);
+
+  // Calculate and update current study streak
+  useEffect(() => {
+    if (!dailyMinutesLog) return;
+    
+    const calculateStreak = (log: { [dateKey: string]: number }): number => {
+      if (!log || Object.keys(log).length === 0) return 0;
+
+      let currentStreak = 0;
+      const today = new Date();
+      
+      const formatDateString = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const r = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${r}`;
+      };
+
+      const todayStr = formatDateString(today);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatDateString(yesterday);
+
+      const hasActivityToday = (log[todayStr] || 0) > 0;
+      const hasActivityYesterday = (log[yesterdayStr] || 0) > 0;
+
+      if (!hasActivityToday && !hasActivityYesterday) {
+        return 0;
+      }
+
+      let currentCheckDate = new Date(today);
+      if (!hasActivityToday && hasActivityYesterday) {
+        currentCheckDate = yesterday;
+      }
+
+      while (true) {
+        const dateStr = formatDateString(currentCheckDate);
+        if ((log[dateStr] || 0) > 0) {
+          currentStreak++;
+          currentCheckDate.setDate(currentCheckDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+
+      return currentStreak;
+    };
+
+    setStreak(calculateStreak(dailyMinutesLog));
+  }, [dailyMinutesLog]);
 
   // Sync today's study minutes with the daily log
   useEffect(() => {
@@ -357,9 +405,23 @@ export default function App() {
           
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 hidden xs:block"></div>
 
-          <div className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400 text-[10px] font-bold rounded-full border border-amber-100 dark:border-amber-900/30 items-center gap-1 hidden md:flex shrink-0">
-            <Flame className="w-3 h-3 text-amber-500" />
-            LIVE STUDY ACTIVE
+          <div className={`px-2.5 py-1 text-[10px] font-bold rounded-full border flex items-center gap-1.5 shrink-0 transition-all ${
+            streak >= 7 
+              ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/30' 
+              : streak >= 3 
+                ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-900/30' 
+                : 'bg-slate-50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+          }`}>
+            <Flame className={`w-3.5 h-3.5 shrink-0 ${
+              streak >= 7 
+                ? 'text-rose-500 fill-rose-500 animate-bounce' 
+                : streak >= 3 
+                  ? 'text-amber-500 fill-amber-500 animate-pulse' 
+                  : 'text-slate-400 dark:text-slate-500'
+            }`} />
+            <span className="uppercase tracking-wider">
+              {streak >= 7 ? `7-Day Supernova (${streak}d)` : streak >= 3 ? `3-Day Burner (${streak}d)` : `${streak} Day Streak`}
+            </span>
           </div>
 
           <button
@@ -444,6 +506,25 @@ export default function App() {
         <div className="bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-900/50 p-2 flex items-center justify-center gap-2 text-red-700 dark:text-red-400 text-xs font-bold shrink-0">
           <AlertTriangle className="w-4 h-4" />
           <span>You are currently offline. Cloud syncing is paused, but you can continue studying using local storage!</span>
+        </div>
+      )}
+
+      {/* Iframe Notice Banner for Sign In */}
+      {isIframe && !user && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-900/40 p-2 flex flex-col sm:flex-row items-center justify-center gap-2 text-amber-800 dark:text-amber-400 text-xs font-bold shrink-0 text-center animate-fade-in">
+          <div className="flex items-center gap-1.5">
+            <AlertTriangle className="w-4 h-4 text-[#FF9900]" />
+            <span>Google Sign-In is restricted inside preview iframes. Please open this app in a new tab to authenticate securely.</span>
+          </div>
+          <a
+            href={window.location.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-[10px] uppercase tracking-wide transition-all cursor-pointer shadow-sm"
+          >
+            <ExternalLink className="w-3 h-3" />
+            <span>Open App in New Tab</span>
+          </a>
         </div>
       )}
 
@@ -736,6 +817,7 @@ export default function App() {
               authLoading={authLoading}
               syncing={syncing}
               dailyMinutesLog={dailyMinutesLog}
+              streak={streak}
             />
           )}
 
