@@ -9,7 +9,8 @@ import {
   User,
   signInAnonymously,
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  signInWithEmailAndPassword,
+  updateProfile
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -154,6 +155,21 @@ export const loginAnonymously = async () => {
     return result.user;
   } catch (error) {
     console.error("Firebase Anonymous login error:", error);
+    throw error;
+  }
+};
+
+// Algorand Pera Wallet login helper
+export const loginWithAlgorandPera = async (walletAddress: string) => {
+  try {
+    const result = await signInAnonymously(auth);
+    const displayName = `ALGO (${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)})`;
+    await updateProfile(result.user, {
+      displayName: displayName
+    });
+    return result.user;
+  } catch (error) {
+    console.error("Algorand Pera login error:", error);
     throw error;
   }
 };

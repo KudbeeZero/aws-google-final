@@ -14,6 +14,7 @@ import { ScenarioMatcher } from "./components/ScenarioMatcher";
 import { TechnicalInterviewSimulator } from "./components/TechnicalInterviewSimulator";
 import { StorageHub } from "./components/StorageHub";
 import { InteractiveProfessor } from "./components/InteractiveProfessor";
+import { AlgorandPortal } from "./components/AlgorandPortal";
 import { getOfflineHtmlString } from "./utils/offlineTemplate";
 import { 
   GraduationCap, 
@@ -39,12 +40,14 @@ import {
   RefreshCw,
   Sun,
   Moon,
-  ExternalLink
+  ExternalLink,
+  Wallet
 } from "lucide-react";
 import { 
   auth, 
   loginWithGoogle, 
   loginAnonymously, 
+  loginWithAlgorandPera,
   logoutUser, 
   saveProgressToCloud, 
   getProgressFromCloud,
@@ -279,6 +282,26 @@ export default function App() {
     }
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setSidebarOpen(false);
+    }
+  };
+
+  const handleAlgorandLogin = async (walletAddress: string, displayName: string) => {
+    try {
+      setAuthLoading(true);
+      const algorandUser = await loginWithAlgorandPera(walletAddress);
+      setUser(algorandUser);
+    } catch (err) {
+      console.error("Algorand authentication failed in app:", err);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleAlgorandLogout = async () => {
+    try {
+      await logoutUser();
+    } catch (err) {
+      console.error("Algorand logout failed:", err);
     }
   };
 
@@ -536,25 +559,25 @@ export default function App() {
         {/* Global Progress Indicators */}
         <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0 min-w-0">
           <div className="flex flex-col items-end shrink-0">
-            <span className="text-[8px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold leading-none">
+            <span className="text-[8px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold leading-none hidden sm:block">
               Ready Score
             </span>
-            <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
-              {readinessScore}% 
-              <span className={`w-2 h-2 rounded-full ${readinessScore >= 80 ? 'bg-emerald-500' : readinessScore >= 40 ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
+            <span className="text-[10px] sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5" title="Readiness Score">
+              <span className="sm:hidden text-slate-400 text-[8px] font-bold">RDY:</span> {readinessScore}% 
+              <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${readinessScore >= 80 ? 'bg-emerald-500' : readinessScore >= 40 ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
             </span>
           </div>
           
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 hidden xs:block"></div>
 
-          <div className={`px-2.5 py-1 text-[10px] font-bold rounded-full border flex items-center gap-1.5 shrink-0 transition-all ${
+          <div className={`px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-bold rounded-full border flex items-center gap-1 sm:gap-1.5 shrink-0 transition-all ${
             streak >= 7 
               ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/30' 
               : streak >= 3 
                 ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-900/30' 
                 : 'bg-slate-50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
           }`}>
-            <Flame className={`w-3.5 h-3.5 shrink-0 ${
+            <Flame className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${
               streak >= 7 
                 ? 'text-rose-500 fill-rose-500 animate-bounce' 
                 : streak >= 3 
@@ -562,13 +585,18 @@ export default function App() {
                   : 'text-slate-400 dark:text-slate-500'
             }`} />
             <span className="uppercase tracking-wider">
-              {streak >= 7 ? `7-Day Supernova (${streak}d)` : streak >= 3 ? `3-Day Burner (${streak}d)` : `${streak} Day Streak`}
+              <span className="hidden sm:inline">
+                {streak >= 7 ? `7-Day Supernova (${streak}d)` : streak >= 3 ? `3-Day Burner (${streak}d)` : `${streak} Day Streak`}
+              </span>
+              <span className="sm:hidden inline">
+                {streak}d
+              </span>
             </span>
           </div>
 
           <button
             onClick={handleDownloadOfflineCompanion}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#FF9900]/10 hover:bg-[#FF9900]/20 text-[#FF9900] text-[10px] sm:text-xs font-black rounded-full border border-[#FF9900]/30 transition-all shadow-sm cursor-pointer shrink-0"
+            className="hidden md:flex items-center gap-1 px-2.5 py-1 bg-[#FF9900]/10 hover:bg-[#FF9900]/20 text-[#FF9900] text-[10px] sm:text-xs font-black rounded-full border border-[#FF9900]/30 transition-all shadow-sm cursor-pointer shrink-0"
             title="Download Single-File Standalone HTML Version"
           >
             <Download className="w-3 h-3" />
@@ -576,7 +604,7 @@ export default function App() {
             <span className="inline lg:hidden">OFFLINE</span>
           </button>
 
-          <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 hidden xs:block"></div>
+          <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 hidden md:block"></div>
 
           {/* User Account / Sync status */}
           {authLoading ? (
@@ -817,6 +845,18 @@ export default function App() {
                   <Database className="w-4 h-4 shrink-0 text-[#FF9900]" />
                   Save Slots & Backups
                 </button>
+
+                <button
+                  onClick={() => handleTabChange("algorand")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
+                    activeTab === "algorand"
+                      ? "bg-slate-900 text-white shadow-sm dark:bg-slate-800 dark:text-slate-100"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <Wallet className="w-4 h-4 shrink-0 text-yellow-500" />
+                  Algorand Web3 Portal
+                </button>
               </nav>
             </div>
 
@@ -1019,6 +1059,15 @@ export default function App() {
             />
           )}
 
+          {activeTab === "algorand" && (
+            <AlgorandPortal
+              user={user}
+              onAlgorandLogin={handleAlgorandLogin}
+              onAlgorandLogout={handleAlgorandLogout}
+              currentStreak={streak}
+            />
+          )}
+
         </main>
       </div>
       
@@ -1092,6 +1141,20 @@ export default function App() {
           <AlertTriangle className="w-5 h-5" />
           <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Exam</span>
           {activeTab === "simulator" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
+        </button>
+
+        <button 
+          onClick={() => handleTabChange("algorand")}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+            activeTab === "algorand" 
+              ? "text-yellow-500" 
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+          title="Algorand Web3"
+        >
+          <Wallet className="w-5 h-5" />
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Pera Web3</span>
+          {activeTab === "algorand" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-yellow-500 rounded-full" />}
         </button>
       </div>
 
