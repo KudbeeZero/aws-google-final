@@ -36,12 +36,27 @@
     },
     "InterviewSession": {
       "title": "InterviewSession",
-      "description": "A saved interview transcript",
+      "description": "A saved interview session",
       "type": "object",
       "properties": {
+        "status": { "type": "string", "enum": ["active", "completed"] },
         "scenarioId": { "type": "string" },
         "transcript": { "type": "string", "maxLength": 100000 },
         "scorecard": { "type": "object" },
+        "currentScenarioIndex": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "SocraticSession": {
+      "title": "SocraticSession",
+      "description": "A saved Professor Socratic chat session",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["active", "completed"] },
+        "messages": { "type": "array" },
+        "topic": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       }
     }
@@ -61,7 +76,11 @@
     },
     "/users/{userId}/interviewSessions/{sessionId}": {
       "schema": "InterviewSession",
-      "description": "Saved interview transcripts"
+      "description": "Saved interview transcripts and active session status"
+    },
+    "/users/{userId}/socraticSessions/{sessionId}": {
+      "schema": "SocraticSession",
+      "description": "Saved Socratic Professor active chat sessions"
     }
   }
 }

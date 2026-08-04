@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { PeraWalletConnect } from "@perawallet/connect";
+import algosdk from "algosdk";
 import { 
   Wallet, 
   Search, 
@@ -19,6 +21,9 @@ import {
   QrCode
 } from "lucide-react";
 
+const peraWallet = new PeraWalletConnect({ shouldShowSignTxnToast: false });
+const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", 443);
+
 interface AlgorandPortalProps {
   user: any;
   onAlgorandLogin: (walletAddress: string, displayName: string) => void;
@@ -34,17 +39,16 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
 }) => {
   // Pera Wallet connection states
   const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionStep, setConnectionStep] = useState<"none" | "qr" | "success">("none");
   const [walletAddress, setWalletAddress] = useState<string>("");
   const [manualAddress, setManualAddress] = useState("");
   const [activeTab, setActiveTab] = useState<"explorer" | "wallet">("explorer");
 
   // Blockchain Explorer states
-  const [blockHeight, setBlockHeight] = useState<number>(38290145);
+  const [blockHeight, setBlockHeight] = useState<number>(0);
   const [algoPrice, setAlgoPrice] = useState<number>(0.185);
-  const [tps, setTps] = useState<number>(18.4);
+  const [tps, setTps] = useState<number>(0);
   const [avgBlockTime, setAvgBlockTime] = useState<number>(2.8);
-  const [totalTransactions, setTotalTransactions] = useState<number>(1429085223);
+  const [totalTransactions, setTotalTransactions] = useState<number>(0);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<any>(null);
@@ -53,29 +57,35 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
 
   // Load state from local storage on mount
   useEffect(() => {
-    const savedAddress = localStorage.getItem("aws_algorand_wallet_address");
-    if (savedAddress) {
-      setWalletAddress(savedAddress);
-    }
+    // Reconnect to Pera session
+    peraWallet.reconnectSession().then((accounts) => {
+      if (accounts.length > 0) {
+        setWalletAddress(accounts[0]);
+        onAlgorandLogin(accounts[0], `Pera Wallet (${accounts[0].slice(0, 4)}...${accounts[0].slice(-4)})`);
+      } else {
+        const savedAddress = localStorage.getItem("aws_algorand_wallet_address");
+        if (savedAddress) setWalletAddress(savedAddress);
+      }
+    });
   }, []);
 
-  // Fetch real-time Algorand data from public Algonode API
+  // Fetch real-time Algorand data from public Algonode TestNet API
   const fetchBlockchainData = async () => {
     setLoadingStats(true);
     try {
-      // Fetch latest block/status from public mainnet Algonode node
-      const statusRes = await fetch("https://mainnet-api.algonode.cloud/v2/status");
+      // Fetch latest block/status from public testnet Algonode node
+      const statusRes = await fetch("https://testnet-api.algonode.cloud/v2/status");
       if (statusRes.ok) {
         const statusData = await statusRes.json();
         const latestRound = statusData["last-round"];
         if (latestRound) {
           setBlockHeight(latestRound);
-          // Set a dynamic total txs estimate based on block height
-          setTotalTransactions(1200000000 + latestRound * 6);
+          // Set a dynamic total txs estimate based on block height (testnet)
+          setTotalTransactions(latestRound * 3);
         }
       }
 
-      // Fetch ALGO price from CoinGecko or use a reliable mock-stream
+      // Fetch ALGO price from CoinGecko
       const priceRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=algorand&vs_currencies=usd");
       if (priceRes.ok) {
         const priceData = await priceRes.json();
@@ -84,13 +94,13 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
         }
       }
     } catch (err) {
-      console.warn("Algorand public node query failed, utilizing failover tracker:", err);
+      console.warn("Algorand public node query failed:", err);
     } finally {
       setLoadingStats(false);
     }
   };
 
-  // Generate mock real-time transaction stream
+  // Generate mock real-time transaction stream since fetching websocket stream is out of scope
   useEffect(() => {
     fetchBlockchainData();
     const interval = setInterval(() => {
@@ -111,7 +121,7 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
         id: genHash(),
         sender: genAddress(),
         receiver: genAddress(),
-        amount: parseFloat((Math.random() * 150 + 0.1).toFixed(3)),
+        amount: parseFloat((Math.random() * 15 + 0.1).toFixed(3)),
         fee: 0.001,
         round: blockHeight - Math.floor(Math.random() * 10),
         timestamp: new Date().toLocaleTimeString(),
@@ -119,11 +129,9 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
       };
     };
 
-    // Initialize list
     const initialTxs = Array.from({ length: 6 }, generateTx);
     setRecentTransactions(initialTxs);
 
-    // Stream incoming txs every 3-4 seconds to mimic Algorand's 2.8s blocks!
     const txStream = setInterval(() => {
       setRecentTransactions((prev) => [generateTx(), ...prev.slice(0, 8)]);
     }, 3200);
@@ -131,28 +139,25 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
     return () => clearInterval(txStream);
   }, [blockHeight]);
 
-  // Handle simulated Pera Wallet connection
-  const handlePeraConnect = () => {
+  // Handle Pera Wallet connection
+  const handlePeraConnect = async () => {
     setIsConnecting(true);
-    setConnectionStep("qr");
-    
-    // Simulate QR code scanning delay
-    setTimeout(() => {
-      setConnectionStep("success");
-      
-      // Generate a realistic valid Algorand mainnet address
-      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-      const randomAddress = "PERA" + Array.from({ length: 50 }, () => chars[Math.floor(Math.random() * chars.length)]).join("") + "ALGO";
-      
-      setTimeout(() => {
-        setWalletAddress(randomAddress);
-        localStorage.setItem("aws_algorand_wallet_address", randomAddress);
-        onAlgorandLogin(randomAddress, `Pera Wallet (${randomAddress.slice(0, 4)}...${randomAddress.slice(-4)})`);
-        setIsConnecting(false);
-        setConnectionStep("none");
+    try {
+      const newAccounts = await peraWallet.connect();
+      if (newAccounts.length > 0) {
+        const address = newAccounts[0];
+        setWalletAddress(address);
+        localStorage.setItem("aws_algorand_wallet_address", address);
+        onAlgorandLogin(address, `Pera Wallet (${address.slice(0, 4)}...${address.slice(-4)})`);
         setActiveTab("wallet");
-      }, 1500);
-    }, 2500);
+      }
+    } catch (error: any) {
+      if (error?.data?.type !== "CONNECT_MODAL_CLOSED") {
+        console.error("Pera Wallet connection failed", error);
+      }
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const handleManualConnect = (e: React.FormEvent) => {
@@ -168,68 +173,57 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
     setActiveTab("wallet");
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    try {
+      await peraWallet.disconnect();
+    } catch (error) {
+      console.error(error);
+    }
     setWalletAddress("");
     localStorage.removeItem("aws_algorand_wallet_address");
     onAlgorandLogout();
   };
 
-  // Perform a blockchain explorer search
+  // Perform a blockchain explorer search using actual algosdk (account info)
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     setSearchResult(null);
 
-    setTimeout(() => {
-      // Simulate checking block, tx, or address
-      const isAddress = searchQuery.length >= 50;
-      const isTxHash = searchQuery.length >= 40 && !isAddress;
-      const isBlock = !isNaN(Number(searchQuery));
-
+    try {
+      const isAddress = searchQuery.length === 58;
+      
       if (isAddress) {
+        const accountInfo = await algodClient.accountInformation(searchQuery).do();
         setSearchResult({
           type: "Account",
           id: searchQuery,
-          balance: parseFloat((Math.random() * 45000 + 10).toFixed(2)),
-          rewards: parseFloat((Math.random() * 12).toFixed(4)),
-          assets: [
-            { id: 31566704, name: "USDC", amount: 250.0 },
-            { id: 1113540292, name: "Pera Gold Asset", amount: 1.0 }
-          ],
-          totalTxs: Math.floor(Math.random() * 200 + 5)
-        });
-      } else if (isTxHash) {
-        setSearchResult({
-          type: "Transaction",
-          id: searchQuery,
-          sender: "7K5D6XWPLOP...OIEWMSRU6Q",
-          receiver: "X9K1LZXNVM5...W3J2OLKP",
-          amount: parseFloat((Math.random() * 1200).toFixed(3)),
-          fee: 0.001,
-          round: blockHeight - Math.floor(Math.random() * 100),
-          status: "Confirmed",
-          timestamp: new Date(Date.now() - 1000 * 60 * 5).toLocaleString()
-        });
-      } else if (isBlock) {
-        setSearchResult({
-          type: "Block / Round",
-          id: searchQuery,
-          txCount: Math.floor(Math.random() * 40 + 2),
-          proposer: "ALGO_NODE_PROPOSER_9021",
-          avgFee: 0.001,
-          timestamp: new Date(Date.now() - 1000 * 60 * 30).toLocaleString()
+          balance: (Number(accountInfo.amount) / 1_000_000).toFixed(6),
+          rewards: (Number(accountInfo.rewards) / 1_000_000).toFixed(6),
+          assets: accountInfo.assets ? accountInfo.assets.map((a: any) => ({
+            id: a['asset-id'],
+            amount: a.amount,
+            name: `Asset ${a['asset-id']}`
+          })) : [],
+          totalTxs: accountInfo['total-apps-opted-in'] || 0 // Mock stat for UI
         });
       } else {
-        // Fallback or random mock
         setSearchResult({
           type: "Unknown Entity",
           id: searchQuery,
-          message: "No exact record matching this hash found on Algorand mainnet."
+          message: "Please enter a valid Algorand TestNet address."
         });
       }
+    } catch (error) {
+      setSearchResult({
+        type: "Error",
+        id: searchQuery,
+        message: "Record not found on Algorand TestNet. Verify it is a valid address."
+      });
+    } finally {
       setIsSearching(false);
-    }, 800);
+    }
   };
 
   return (
@@ -241,7 +235,7 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
           ALGORAND MAINNET PROXY
         </div>
         
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 relative z-10">
           <div className="space-y-2">
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-sm bg-gradient-to-tr from-yellow-500 to-amber-600 flex items-center justify-center font-black text-slate-950 shadow-md">
@@ -258,16 +252,16 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
             </div>
           </div>
 
-          <div className="shrink-0">
+          <div className="shrink-0 w-full md:w-auto mt-2 md:mt-0">
             {walletAddress ? (
-              <div className="flex items-center gap-3">
-                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-sm flex items-center gap-2 text-xs font-mono">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                  <span>PERA CONNECTED: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-sm flex items-center gap-2 text-xs font-mono justify-center">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shrink-0" />
+                  <span className="truncate">PERA CONNECTED: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
                 </div>
                 <button
                   onClick={handleDisconnect}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-sm transition-all"
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-sm transition-all text-center"
                 >
                   Disconnect
                 </button>
@@ -276,7 +270,7 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
               <button
                 onClick={handlePeraConnect}
                 disabled={isConnecting}
-                className="px-5 py-2.5 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-sm flex items-center gap-2 shadow-md hover:scale-[1.01] transition-all cursor-pointer"
+                className="w-full md:w-auto px-5 py-2.5 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-sm flex items-center justify-center gap-2 shadow-md hover:scale-[1.01] transition-all cursor-pointer"
               >
                 <Wallet className="w-4 h-4" />
                 {isConnecting ? "Connecting Pera..." : "Connect Pera Wallet"}
@@ -321,56 +315,16 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
         </div>
       </div>
 
-      {/* Connection Popup Simulation */}
-      {isConnecting && connectionStep === "qr" && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-sm max-w-sm w-full text-center space-y-6 shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <span className="text-xs font-bold font-mono text-yellow-500">Pera Connect Security</span>
-              <button onClick={() => setIsConnecting(false)} className="text-slate-400 hover:text-white text-xs">✕</button>
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="text-white font-extrabold text-base">Connect with Pera Wallet</h3>
-              <p className="text-xs text-slate-400">Scan the secure QR code using the Pera Mobile app on your device.</p>
-            </div>
-
-            {/* QR Code Container */}
-            <div className="w-48 h-48 bg-white p-3 mx-auto rounded-md shadow-inner flex items-center justify-center relative">
-              <QrCode className="w-44 h-44 text-slate-900" />
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/5">
-                {/* Scanner bar animation */}
-                <div className="w-full h-1 bg-yellow-500 absolute top-0 left-0 animate-bounce" />
-              </div>
-            </div>
-
-            <div className="bg-slate-950 p-2.5 rounded text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-[#FF9900]" />
-              <span>Session encrypted. Handshake in progress...</span>
-            </div>
-            
-            <div className="text-center">
-              <button 
-                onClick={() => setConnectionStep("success")}
-                className="text-[10px] text-[#FF9900] hover:underline font-bold"
-              >
-                Simulate successful scan callback
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Views Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Navigation Tabs bar */}
-        <div className="lg:col-span-12 flex border-b border-slate-200 dark:border-slate-800">
+        <div className="lg:col-span-12 flex flex-col sm:flex-row border-b border-slate-200 dark:border-slate-800 gap-2 sm:gap-0">
           <button
             onClick={() => setActiveTab("explorer")}
-            className={`px-4 py-2.5 text-xs font-bold tracking-tight border-b-2 transition-all ${
+            className={`px-4 py-3 sm:py-2.5 text-xs font-bold tracking-tight border-l-2 sm:border-l-0 sm:border-b-2 transition-all text-left sm:text-center ${
               activeTab === "explorer"
-                ? "border-yellow-500 text-slate-900 dark:text-white"
+                ? "border-yellow-500 bg-yellow-500/5 sm:bg-transparent text-slate-900 dark:text-white"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
@@ -378,9 +332,9 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab("wallet")}
-            className={`px-4 py-2.5 text-xs font-bold tracking-tight border-b-2 transition-all ${
+            className={`px-4 py-3 sm:py-2.5 text-xs font-bold tracking-tight border-l-2 sm:border-l-0 sm:border-b-2 transition-all text-left sm:text-center ${
               activeTab === "wallet"
-                ? "border-yellow-500 text-slate-900 dark:text-white"
+                ? "border-yellow-500 bg-yellow-500/5 sm:bg-transparent text-slate-900 dark:text-white"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >

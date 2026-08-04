@@ -15,6 +15,7 @@ import { TechnicalInterviewSimulator } from "./components/TechnicalInterviewSimu
 import { StorageHub } from "./components/StorageHub";
 import { InteractiveProfessor } from "./components/InteractiveProfessor";
 import { AlgorandPortal } from "./components/AlgorandPortal";
+import { AgentSwarmHub } from "./components/AgentSwarmHub";
 import { getOfflineHtmlString } from "./utils/offlineTemplate";
 import { 
   GraduationCap, 
@@ -23,6 +24,7 @@ import {
   AlertTriangle, 
   HelpCircle, 
   Terminal, 
+  Cpu, 
   ShieldCheck, 
   Menu, 
   X,
@@ -41,7 +43,12 @@ import {
   Sun,
   Moon,
   ExternalLink,
-  Wallet
+  Wallet,
+  Compass,
+  Rocket,
+  Globe,
+  CheckCircle2,
+  ArrowRight
 } from "lucide-react";
 import { 
   auth, 
@@ -59,6 +66,10 @@ import { onAuthStateChanged, User, getRedirectResult } from "firebase/auth";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [showQuickStartGuide, setShowQuickStartGuide] = useState<boolean>(false);
+  const [showDeployGuide, setShowDeployGuide] = useState<boolean>(false);
+  const [quickStartStep, setQuickStartStep] = useState<number>(1);
+
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return window.innerWidth >= 768;
@@ -595,13 +606,30 @@ export default function App() {
           </div>
 
           <button
+            onClick={() => setShowQuickStartGuide(true)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] sm:text-xs font-black rounded-full border border-amber-500/30 transition-all shadow-xs cursor-pointer shrink-0"
+            title="Interactive 10-Minute Rapid Onboarding Tour"
+          >
+            <Compass className="w-3.5 h-3.5 text-amber-500" />
+            <span className="hidden sm:inline">10-MIN GUIDE</span>
+          </button>
+
+          <button
+            onClick={() => setShowDeployGuide(true)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-[10px] sm:text-xs font-black rounded-full border border-cyan-500/30 transition-all shadow-xs cursor-pointer shrink-0"
+            title="Cloud Run & Cloudflare Deployment Guide"
+          >
+            <Rocket className="w-3.5 h-3.5 text-cyan-500" />
+            <span className="hidden md:inline">DEPLOY</span>
+          </button>
+
+          <button
             onClick={handleDownloadOfflineCompanion}
-            className="hidden md:flex items-center gap-1 px-2.5 py-1 bg-[#FF9900]/10 hover:bg-[#FF9900]/20 text-[#FF9900] text-[10px] sm:text-xs font-black rounded-full border border-[#FF9900]/30 transition-all shadow-sm cursor-pointer shrink-0"
+            className="hidden lg:flex items-center gap-1 px-2.5 py-1 bg-[#FF9900]/10 hover:bg-[#FF9900]/20 text-[#FF9900] text-[10px] sm:text-xs font-black rounded-full border border-[#FF9900]/30 transition-all shadow-sm cursor-pointer shrink-0"
             title="Download Single-File Standalone HTML Version"
           >
             <Download className="w-3 h-3" />
-            <span className="hidden lg:inline">OFFLINE COMPANION (.HTML)</span>
-            <span className="inline lg:hidden">OFFLINE</span>
+            <span className="hidden lg:inline">OFFLINE (.HTML)</span>
           </button>
 
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 hidden md:block"></div>
@@ -820,6 +848,18 @@ export default function App() {
                 >
                   <Briefcase className="w-4 h-4 shrink-0 text-[#FF9900]" />
                   HONE Interview Prep
+                </button>
+
+                <button
+                  onClick={() => handleTabChange("agents")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
+                    activeTab === "agents"
+                      ? "bg-slate-900 text-white shadow-sm dark:bg-slate-800 dark:text-slate-100"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <Cpu className="w-4 h-4 shrink-0 text-emerald-500" />
+                  AI Agent Swarm Platform
                 </button>
 
                 <button
@@ -1050,6 +1090,10 @@ export default function App() {
             <TechnicalInterviewSimulator aiModelMode={aiModelMode} user={user} />
           )}
 
+          {activeTab === "agents" && (
+            <AgentSwarmHub user={user} aiModelMode={aiModelMode} />
+          )}
+
           {activeTab === "backup" && (
             <StorageHub 
               studyHistory={studyHistory}
@@ -1144,6 +1188,20 @@ export default function App() {
         </button>
 
         <button 
+          onClick={() => handleTabChange("agents")}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+            activeTab === "agents" 
+              ? "text-emerald-500" 
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+          title="AI Swarm Platform"
+        >
+          <Cpu className="w-5 h-5 text-emerald-500" />
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Swarm</span>
+          {activeTab === "agents" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full" />}
+        </button>
+
+        <button 
           onClick={() => handleTabChange("algorand")}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
             activeTab === "algorand" 
@@ -1157,6 +1215,244 @@ export default function App() {
           {activeTab === "algorand" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-yellow-500 rounded-full" />}
         </button>
       </div>
+
+      {/* Modal 1: 10-Minute Rapid Onboarding Walkthrough */}
+      {showQuickStartGuide && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm max-w-2xl w-full p-6 space-y-5 shadow-2xl relative animate-fade-in">
+            <button
+              onClick={() => setShowQuickStartGuide(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-sm"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="w-10 h-10 bg-amber-500/10 text-amber-500 flex items-center justify-center rounded-sm border border-amber-500/30 shrink-0">
+                <Compass className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  10-Minute Cloud Practitioner Onboarding
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Master the 4 core workflows of this application in 10 minutes or less.
+                </p>
+              </div>
+            </div>
+
+            {/* Step Progress Bar */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { step: 1, title: "1. Swarm Council", time: "Min 1-3" },
+                { step: 2, title: "2. Real Scenarios", time: "Min 4-6" },
+                { step: 3, title: "3. Security Audit", time: "Min 7-8" },
+                { step: 4, title: "4. ASA Credential", time: "Min 9-10" }
+              ].map(s => (
+                <button
+                  key={s.step}
+                  onClick={() => setQuickStartStep(s.step)}
+                  className={`p-2 rounded-xs border text-left transition-all cursor-pointer ${
+                    quickStartStep === s.step
+                      ? "bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400"
+                      : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500"
+                  }`}
+                >
+                  <span className="block text-[10px] font-black uppercase">{s.time}</span>
+                  <span className="block text-[11px] font-bold truncate">{s.title}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Step Content */}
+            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xs border border-slate-200 dark:border-slate-800 space-y-3">
+              {quickStartStep === 1 && (
+                <div className="space-y-2">
+                  <span className="text-xs font-black text-amber-500 uppercase tracking-wider block">
+                    Step 1: Consult Your AI Swarm Council (3 mins)
+                  </span>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Meet <strong>Archie</strong> (Solutions Architect), <strong>PennyWise</strong> (FinOps), <strong>Guardian</strong> (Security), and <strong>Trap Master</strong> (Exam Traps). Ask any CLF-C02 question or spawn your own custom AI agent!
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowQuickStartGuide(false);
+                      handleTabChange("agents");
+                    }}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Launch AI Swarm Platform</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {quickStartStep === 2 && (
+                <div className="space-y-2">
+                  <span className="text-xs font-black text-amber-500 uppercase tracking-wider block">
+                    Step 2: Tackle Real Exam Scenarios (3 mins)
+                  </span>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Test your knowledge against real AWS CLF-C02 scenarios with distractor traps and community RLHF voting.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowQuickStartGuide(false);
+                      handleTabChange("simulator");
+                    }}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Try Exam Simulator</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {quickStartStep === 3 && (
+                <div className="space-y-2">
+                  <span className="text-xs font-black text-amber-500 uppercase tracking-wider block">
+                    Step 3: Run Zero-Trust Security Pen-Test (2 mins)
+                  </span>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Verify application security posture. The Guardian Shield runs rate limiters (120 req/min/IP), anti-XSS filters, and prompt injection guards.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowQuickStartGuide(false);
+                      handleTabChange("agents");
+                    }}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Run Security Pen-Test Audit</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {quickStartStep === 4 && (
+                <div className="space-y-2">
+                  <span className="text-xs font-black text-amber-500 uppercase tracking-wider block">
+                    Step 4: Mint Web3 Blockchain Credential (2 mins)
+                  </span>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Mint an immutable Solutions Architect credential on Algorand testnet directly inside the Web3 Portal!
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowQuickStartGuide(false);
+                      handleTabChange("algorand");
+                    }}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Open Algorand Web3 Portal</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-[10px] text-slate-400 font-mono">
+                Step {quickStartStep} of 4 • 10-Min Cloud Master Curriculum
+              </span>
+              <button
+                onClick={() => setShowQuickStartGuide(false)}
+                className="px-4 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-xs hover:bg-slate-800 cursor-pointer"
+              >
+                Close Walkthrough
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Deployment & Hosting Center */}
+      {showDeployGuide && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm max-w-2xl w-full p-6 space-y-5 shadow-2xl relative animate-fade-in">
+            <button
+              onClick={() => setShowDeployGuide(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-sm"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="w-10 h-10 bg-cyan-500/10 text-cyan-500 flex items-center justify-center rounded-sm border border-cyan-500/30 shrink-0">
+                <Rocket className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  Cloud Deployment & Hosting Center
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Ready to publish this application? Choose your preferred deployment target below.
+                </p>
+              </div>
+            </div>
+
+            {/* Deployment Targets */}
+            <div className="space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xs border border-cyan-800/60 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-xs text-cyan-500 flex items-center gap-1.5 font-mono">
+                    <Globe className="w-3.5 h-3.5" />
+                    1-CLICK GOOGLE CLOUD RUN (RECOMMENDED)
+                  </span>
+                  <span className="text-[9px] bg-cyan-950 text-cyan-300 font-bold px-1.5 py-0.5 rounded-xs border border-cyan-800">
+                    NATIVE
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Deploy directly to Google Cloud Run containers with zero configuration! Click the <strong>"Share / Deploy"</strong> button in the AI Studio top toolbar to generate a shareable HTTPS URL.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xs border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-xs text-amber-500 flex items-center gap-1.5 font-mono">
+                    <Zap className="w-3.5 h-3.5" />
+                    CLOUDFLARE PAGES & WORKERS
+                  </span>
+                  <span className="text-[9px] bg-amber-950 text-amber-300 font-bold px-1.5 py-0.5 rounded-xs border border-amber-800">
+                    EDGE KV
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Sub-10ms global delivery with Cloudflare Workers KV cache. Static frontend bundles serve via Cloudflare Pages and backend routes proxy via Cloudflare Workers.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xs border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-xs text-emerald-500 flex items-center gap-1.5 font-mono">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    GEMINI 3.6 FLASH API KEY INTEGRATION
+                  </span>
+                  <span className="text-[9px] bg-emerald-950 text-emerald-300 font-bold px-1.5 py-0.5 rounded-xs border border-emerald-800">
+                    SERVER-SIDE
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Gemini API is integrated server-side via Express endpoint <code>/api/gemini/agent-insight</code> using <code>@google/genai</code>. Your API key is configured safely in AI Studio <strong>Settings &gt; Secrets</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-800">
+              <span className="text-[10px] text-slate-400 font-mono">
+                Port 3000 • Production Node 22 CommonJS Server Ready
+              </span>
+              <button
+                onClick={() => setShowDeployGuide(false)}
+                className="px-4 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-xs hover:bg-slate-800 cursor-pointer"
+              >
+                Close Deployment Center
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer Meta bar */}
       <footer className="h-10 bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 shrink-0 font-mono select-none z-20">

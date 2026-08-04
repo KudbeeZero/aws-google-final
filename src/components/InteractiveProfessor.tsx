@@ -17,8 +17,16 @@ import {
   GraduationCap,
   Copy,
   Download,
-  Check
+  Check,
+  Play
 } from "lucide-react";
+import { 
+  auth, 
+  saveActiveSocraticSessionState, 
+  getMostRecentActiveSocraticSession, 
+  markSocraticSessionCompleted, 
+  ActiveSocraticSessionDoc 
+} from "../lib/firebase";
 
 interface ChatMessage {
   id: string;
@@ -84,6 +92,41 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     return (metaEnv?.VITE_GEMINI_API_KEY as string) || "";
   });
 
+  // Active Socratic Session Resume State
+  const [activeSessionDoc, setActiveSessionDoc] = useState<ActiveSocraticSessionDoc | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string>(`socratic-${Date.now()}`);
+
+  // Check Firestore for active session upon user login
+  useEffect(() => {
+    if (user?.uid) {
+      getMostRecentActiveSocraticSession(user.uid).then((docData) => {
+        if (docData && docData.status === "active" && docData.messages && docData.messages.length > 1) {
+          setActiveSessionDoc(docData);
+        } else {
+          setActiveSessionDoc(null);
+        }
+      }).catch(err => console.error("Error checking active Socratic session:", err));
+    } else {
+      setActiveSessionDoc(null);
+    }
+  }, [user]);
+
+  const handleResumeActiveSocraticSession = () => {
+    if (!activeSessionDoc) return;
+    setCurrentSessionId(activeSessionDoc.sessionId);
+    if (activeSessionDoc.messages && activeSessionDoc.messages.length > 0) {
+      setMessages(activeSessionDoc.messages);
+    }
+    setActiveSessionDoc(null);
+  };
+
+  const handleDismissActiveSocraticSession = () => {
+    if (user?.uid && activeSessionDoc?.sessionId) {
+      markSocraticSessionCompleted(user.uid, activeSessionDoc.sessionId);
+    }
+    setActiveSessionDoc(null);
+  };
+
   // Load chat history from Postgres or localStorage
   useEffect(() => {
     if (user) {
@@ -109,11 +152,15 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     }
   }, [user]);
 
-  // Save chat history to Postgres or localStorage
+  // Save chat history to Postgres or localStorage and Firestore active session
   const saveHistory = async (newMessages: ChatMessage[]) => {
     setMessages(newMessages);
     if (user) {
       await saveChatHistoryToCloud(newMessages);
+      await saveActiveSocraticSessionState(user.uid, currentSessionId, {
+        status: "active",
+        messages: newMessages
+      });
     } else {
       localStorage.setItem("aws_professor_chat_history_v1", JSON.stringify(newMessages));
     }
@@ -173,8 +220,13 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     setIsKeySetupOpen(true);
   };
 
-  const handleResetChat = () => {
+  const handleResetChat = async () => {
     if (window.confirm("Are you sure you want to reset your conversation history with Professor Cloud?")) {
+      if (user?.uid && currentSessionId) {
+        await markSocraticSessionCompleted(user.uid, currentSessionId);
+      }
+      const newSession = `socratic-${Date.now()}`;
+      setCurrentSessionId(newSession);
       saveHistory([INITIAL_WELCOME]);
       setApiError(null);
     }
@@ -360,6 +412,43 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
           </button>
         </div>
       </div>
+
+      {/* Resume Active Session Banner */}
+      {activeSessionDoc && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between gap-3 animate-fade-in text-slate-200">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded bg-amber-500/20 text-amber-400">
+              <Play className="w-4 h-4 fill-amber-400" />
+            </div>
+            <div>
+              <p className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                Active Socratic Session Found!
+                <span className="text-[10px] font-mono font-normal text-slate-400">
+                  ({activeSessionDoc.messages?.length || 0} messages)
+                </span>
+              </p>
+              <p className="text-[11px] text-slate-400">
+                You have an unfinished chat with Professor Cloud from {new Date(activeSessionDoc.updatedAt || activeSessionDoc.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDismissActiveSocraticSession}
+              className="px-2.5 py-1 text-xs text-slate-400 hover:text-white font-bold cursor-pointer"
+            >
+              Start Fresh
+            </button>
+            <button
+              onClick={handleResumeActiveSocraticSession}
+              className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded flex items-center gap-1 shadow-sm cursor-pointer"
+            >
+              <Play className="w-3 h-3 fill-slate-950" />
+              <span>Resume Session</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* CONDITIONAL KEY SETUP DRAWER / MODAL PANEL */}
       {(!apiKey || isKeySetupOpen) ? (

@@ -26,7 +26,14 @@ import {
   Loader2,
   HelpCircle
 } from "lucide-react";
-import { auth, saveInterviewSessionToCloud } from "../lib/firebase";
+import { 
+  auth, 
+  saveInterviewSessionToCloud,
+  saveActiveInterviewSessionState,
+  getMostRecentActiveInterviewSession,
+  markInterviewSessionCompleted,
+  ActiveInterviewSessionDoc
+} from "../lib/firebase";
 import { getRoadmapFromCloud, saveRoadmapToCloud } from "../lib/db-client";
 
 interface Interviewer {
@@ -350,6 +357,66 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
   const [sessionTimer, setSessionTimer] = useState<number>(0);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
+  // Active Session Resume State
+  const [activeSessionDoc, setActiveSessionDoc] = useState<ActiveInterviewSessionDoc | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  // Check Firestore for active session upon user login
+  useEffect(() => {
+    if (user?.uid) {
+      getMostRecentActiveInterviewSession(user.uid).then((docData) => {
+        if (docData && docData.status === "active") {
+          setActiveSessionDoc(docData);
+        } else {
+          setActiveSessionDoc(null);
+        }
+      }).catch(err => console.error("Error checking active interview session:", err));
+    } else {
+      setActiveSessionDoc(null);
+    }
+  }, [user]);
+
+  // Sync active interview state to Firestore continuously during active session
+  useEffect(() => {
+    if (isInterviewActive && user?.uid && currentSessionId) {
+      saveActiveInterviewSessionState(user.uid, currentSessionId, {
+        status: "active",
+        scenarioId: selectedScenario.id,
+        currentScenarioIndex,
+        userResponse,
+        scorecards: sessionScorecards,
+        transcripts: sessionTranscripts,
+        difficultyMode
+      });
+    }
+  }, [isInterviewActive, currentScenarioIndex, userResponse, sessionScorecards, user, currentSessionId, selectedScenario.id, difficultyMode]);
+
+  // Handler to resume active interview session
+  const handleResumeActiveInterviewSession = () => {
+    if (!activeSessionDoc) return;
+    setCurrentSessionId(activeSessionDoc.sessionId);
+    setDifficultyMode(activeSessionDoc.difficultyMode || "Medium");
+    
+    const targetScenario = SCENARIOS.find(s => s.id === activeSessionDoc.scenarioId) || SCENARIOS[activeSessionDoc.currentScenarioIndex || 0] || SCENARIOS[0];
+    setSelectedScenario(targetScenario);
+    setSessionScenarios([targetScenario]);
+    setCurrentScenarioIndex(activeSessionDoc.currentScenarioIndex || 0);
+    setUserResponse(activeSessionDoc.userResponse || "");
+    setSessionScorecards(activeSessionDoc.scorecards || []);
+    setSessionTranscripts(activeSessionDoc.transcripts || []);
+    
+    setIsInterviewActive(true);
+    setIsTimerRunning(true);
+    setActiveSessionDoc(null);
+  };
+
+  const handleDismissActiveInterviewSession = () => {
+    if (user?.uid && activeSessionDoc?.sessionId) {
+      markInterviewSessionCompleted(user.uid, activeSessionDoc.sessionId);
+    }
+    setActiveSessionDoc(null);
+  };
+
   // Timer simulation
   useEffect(() => {
     let interval: any = null;
@@ -456,6 +523,9 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
 
   // Boardroom Lifecycle Managers
   const startInterviewSession = (format: "single" | "panel", diff: "Easy" | "Medium" | "Hard", startingScenario: InterviewScenario) => {
+    const newSessionId = `interview-${Date.now()}`;
+    setCurrentSessionId(newSessionId);
+    
     setCameraLoading(true);
     setInterviewFormat(format);
     setDifficultyMode(diff);
@@ -479,6 +549,18 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
       setSelectedScenario(startingScenario);
     }
 
+    if (user?.uid) {
+      saveActiveInterviewSessionState(user.uid, newSessionId, {
+        status: "active",
+        scenarioId: startingScenario.id,
+        currentScenarioIndex: 0,
+        userResponse: "",
+        scorecards: [],
+        transcripts: [],
+        difficultyMode: diff
+      });
+    }
+
     setTimeout(() => {
       setCameraLoading(false);
       setIsInterviewActive(true);
@@ -488,9 +570,13 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
   };
 
   const advanceSessionQuestion = () => {
+    let updatedScorecards = sessionScorecards;
+    let updatedTranscripts = sessionTranscripts;
     if (scorecard) {
-      setSessionScorecards(prev => [...prev, scorecard]);
-      setSessionTranscripts(prev => [...prev, userResponse]);
+      updatedScorecards = [...sessionScorecards, scorecard];
+      updatedTranscripts = [...sessionTranscripts, userResponse];
+      setSessionScorecards(updatedScorecards);
+      setSessionTranscripts(updatedTranscripts);
     }
     
     const nextIndex = currentScenarioIndex + 1;
@@ -499,13 +585,31 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
       setSelectedScenario(sessionScenarios[nextIndex]);
       resetInterviewState();
       setHintsLeft(difficultyMode === "Easy" ? 3 : difficultyMode === "Medium" ? 1 : 0);
+      
+      if (user?.uid && currentSessionId) {
+        saveActiveInterviewSessionState(user.uid, currentSessionId, {
+          status: "active",
+          scenarioId: sessionScenarios[nextIndex].id,
+          currentScenarioIndex: nextIndex,
+          userResponse: "",
+          scorecards: updatedScorecards,
+          transcripts: updatedTranscripts,
+          difficultyMode
+        });
+      }
     } else {
       setIsTimerRunning(false);
       setIsSessionFinished(true);
+      if (user?.uid && currentSessionId) {
+        markInterviewSessionCompleted(user.uid, currentSessionId);
+      }
     }
   };
 
   const exitInterviewSession = () => {
+    if (user?.uid && currentSessionId) {
+      markInterviewSessionCompleted(user.uid, currentSessionId);
+    }
     setIsInterviewActive(false);
     setIsSessionFinished(false);
     setIsTimerRunning(false);
@@ -672,6 +776,45 @@ Evaluate the user's response. Provide deep Socratic architectural analysis. Grad
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       
+      {/* Resume Active Session Banner */}
+      {activeSessionDoc && !isInterviewActive && (
+        <div className="bg-amber-500/10 border border-amber-500/40 rounded-xs p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
+              <Play className="w-4 h-4 fill-amber-500 ml-0.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm text-amber-600 dark:text-amber-400">
+                  Active Interview Session Found!
+                </span>
+                <span className="text-[10px] uppercase font-black px-1.5 py-0.5 bg-amber-500 text-slate-950 rounded-xs">
+                  {activeSessionDoc.difficultyMode} Mode
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                You have an unfinished session from {new Date(activeSessionDoc.updatedAt || activeSessionDoc.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (Scenario #{activeSessionDoc.currentScenarioIndex + 1}).
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <button
+              onClick={handleDismissActiveInterviewSession}
+              className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-bold cursor-pointer"
+            >
+              Start New
+            </button>
+            <button
+              onClick={handleResumeActiveInterviewSession}
+              className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-slate-950" />
+              <span>Resume Last Session</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner Navigation */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-3 gap-4">
         <div>
