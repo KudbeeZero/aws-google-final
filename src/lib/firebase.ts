@@ -14,6 +14,7 @@ import {
 } from "firebase/auth";
 import { 
   getFirestore, 
+  initializeFirestore,
   doc, 
   setDoc, 
   getDoc, 
@@ -30,7 +31,8 @@ import firebaseConfig from "../../firebase-applet-config.json";
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+const databaseId = (firebaseConfig as any).firestoreDatabaseId || "ai-studio-awsgoogle-604aa811-c001-435f-9b8a-79bcde52948d";
+export const db = initializeFirestore(app, {}, databaseId);
 export const googleProvider = new GoogleAuthProvider();
 
 export class FirebaseAuthError extends Error {
@@ -313,6 +315,28 @@ export interface InterviewSessionData {
   createdAt: string;
 }
 
+export const getInterviewSessionsFromCloud = async (): Promise<any[]> => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+      console.warn("No auth token available for getInterviewSessionsFromCloud");
+      return [];
+    }
+    const response = await fetch("/api/interview-sessions", {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+    if (response.ok) {
+      return await response.json();
+    }
+    return [];
+  } catch (error) {
+    console.error("Failed to fetch interview sessions from cloud:", error);
+    return [];
+  }
+};
+
 export const saveInterviewSessionToCloud = async (userId: string, sessionId: string, sessionData: InterviewSessionData) => {
   try {
     const token = await auth.currentUser?.getIdToken();
@@ -490,6 +514,21 @@ export interface LeaderboardEntry {
   updatedAt: string;
 }
 
+// Timeout helper to ensure Firestore never hangs client rendering
+function withTimeout<T>(promise: Promise<T>, ms: number, fallbackValue: T): Promise<T> {
+  let timer: any;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallbackValue), ms);
+  });
+  return Promise.race([
+    promise.then((res) => {
+      clearTimeout(timer);
+      return res;
+    }),
+    timeoutPromise
+  ]);
+}
+
 export const syncStreakToLeaderboard = async (
   userId: string, 
   displayName: string | null, 
@@ -497,50 +536,62 @@ export const syncStreakToLeaderboard = async (
   photoURL: string | null, 
   streak: number
 ) => {
+  const payload = {
+    userId,
+    displayName: displayName || "Cloud Learner",
+    email: email || "",
+    photoURL: photoURL || "",
+    streak: streak,
+    updatedAt: new Date().toISOString()
+  };
+
+  // 1. Sync to backend Express API
+  try {
+    await fetch("/api/leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (apiErr) {
+    console.warn("Express leaderboard sync failed (non-fatal):", apiErr);
+  }
+
+  // 2. Sync to Firebase Firestore with 1.5s timeout
   try {
     const leaderDocRef = doc(db, "leaderboard", userId);
-    await setDoc(leaderDocRef, {
-      userId,
-      displayName: displayName || "Cloud Learner",
-      email: email || "",
-      photoURL: photoURL || "",
-      streak: streak,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-    console.log("Successfully synced streak to leaderboard:", streak);
+    await withTimeout(setDoc(leaderDocRef, payload, { merge: true }), 1500, null);
+    console.log("Synced streak to Firestore leaderboard:", streak);
   } catch (error) {
-    console.error("Failed to sync streak to leaderboard:", error);
+    console.warn("Firestore leaderboard sync skipped or failed:", error);
   }
 };
 
 export const getLeaderboard = async (): Promise<LeaderboardEntry[]> => {
+  // Try server API first or in parallel for instant sub-second response
+  try {
+    const res = await fetch("/api/leaderboard");
+    if (res.ok) {
+      const serverEntries = await res.json();
+      if (Array.isArray(serverEntries) && serverEntries.length > 0) {
+        return serverEntries;
+      }
+    }
+  } catch (e) {
+    // API fail non-fatal
+  }
+
+  // Attempt Firestore query with a strict 1.2 second timeout
   try {
     const leaderboardCol = collection(db, "leaderboard");
     const q = query(leaderboardCol, orderBy("streak", "desc"), limit(25));
-    const querySnapshot = await getDocs(q);
-    const entries: LeaderboardEntry[] = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      entries.push({
-        userId: data.userId || doc.id,
-        displayName: data.displayName || "Cloud Learner",
-        email: data.email || "",
-        photoURL: data.photoURL || "",
-        streak: Number(data.streak) || 0,
-        updatedAt: data.updatedAt || ""
-      });
-    });
-    return entries;
-  } catch (error) {
-    console.warn("Ordered leaderboard query failed, falling back to un-ordered query:", error);
-    try {
-      const leaderboardCol = collection(db, "leaderboard");
-      const querySnapshot = await getDocs(leaderboardCol);
+    const querySnapshot = await withTimeout(getDocs(q), 1200, null as any);
+
+    if (querySnapshot && querySnapshot.docs) {
       const entries: LeaderboardEntry[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
         entries.push({
-          userId: data.userId || doc.id,
+          userId: data.userId || docSnap.id,
           displayName: data.displayName || "Cloud Learner",
           email: data.email || "",
           photoURL: data.photoURL || "",
@@ -548,10 +599,11 @@ export const getLeaderboard = async (): Promise<LeaderboardEntry[]> => {
           updatedAt: data.updatedAt || ""
         });
       });
-      return entries.sort((a, b) => b.streak - a.streak).slice(0, 25);
-    } catch (fallbackError) {
-      console.error("Failed to fetch leaderboard in fallback mode:", fallbackError);
-      return [];
+      return entries;
     }
+  } catch (error) {
+    console.warn("Firestore leaderboard query error (using local fallback):", error);
   }
+
+  return [];
 };

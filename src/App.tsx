@@ -59,6 +59,7 @@ import {
   logoutUser, 
   saveProgressToCloud, 
   getProgressFromCloud,
+  getInterviewSessionsFromCloud,
   syncStreakToLeaderboard,
   getAuthDiagnostics,
   FirebaseAuthError
@@ -108,6 +109,18 @@ export default function App() {
       document.documentElement.classList.remove("dark");
     }
   }, [darkMode]);
+
+  // iOS scroll locking when mobile tools menu is open
+  useEffect(() => {
+    if (showMobileMoreMenu) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [showMobileMoreMenu]);
 
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
@@ -274,6 +287,10 @@ export default function App() {
           localStorage.removeItem("aws_guest_trickSimulatorState_v1");
           localStorage.removeItem("aws_guest_vaultState_v1");
 
+          // Load interview sessions history
+          const interviewSessions = await getInterviewSessionsFromCloud();
+          setInterviewHistory(interviewSessions);
+          
         } catch (error) {
           console.error("Postgres load & merge error:", error);
         } finally {
@@ -360,6 +377,7 @@ export default function App() {
   const [trickSimulatorState, setTrickSimulatorState] = useState<any>(() => getLocalState("trickSimulatorState", {}));
   const [vaultState, setVaultState] = useState<any>(() => getLocalState("vaultState", {}));
   const [streak, setStreak] = useState<number>(0);
+  const [interviewHistory, setInterviewHistory] = useState<any[]>([]);
   
   // Flag to prevent overwriting cloud state with empty local state on first load
   const [hasLoadedCloudData, setHasLoadedCloudData] = useState<boolean>(false);
@@ -1002,7 +1020,7 @@ export default function App() {
                 </button>
               </div>
               <p className="text-[9px] text-slate-400 leading-tight">
-                {aiModelMode === "fast" ? "gemini-3.5-flash: Optimized for speed and quick recall." : "gemini-3.1-pro: Advanced reasoning for complex scenarios."}
+                {aiModelMode === "fast" ? "gemini-3.6-flash (Concise): Optimized for speed and rapid recall." : "gemini-3.6-flash (Socratic): Advanced deep-reasoning socratic mode."}
               </p>
             </div>
             {/* Theme Toggle */}
@@ -1085,6 +1103,7 @@ export default function App() {
               redirectError={redirectError}
               redirectSuggestedAction={redirectSuggestedAction}
               redirectErrorGuide={redirectErrorGuide}
+              interviewHistory={interviewHistory}
             />
           )}
 

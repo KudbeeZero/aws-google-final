@@ -64,33 +64,51 @@ export const domainsData: DomainData[] = [
 ];
 
 export const initialFlashcards: Flashcard[] = [
-  // Domain 1
+  // Domain 1: Cloud Concepts
   {
     id: "fc-1",
     domainId: "cloud-concepts",
     question: "Who is responsible for the physical security of AWS data centers?",
-    answer: "AWS. This falls under Security 'OF' the Cloud, which includes hardware, physical facilities, and virtualization infrastructure."
+    answer: "AWS. This falls under Security 'OF' the Cloud, which includes hardware, physical facilities, hypervisors, and core networking."
   },
   {
     id: "fc-2",
     domainId: "cloud-concepts",
     question: "Is the customer responsible for patching the guest operating system on an Amazon EC2 instance?",
-    answer: "Yes. This falls under Security 'IN' the Cloud because the customer owns and maintains the guest OS and any applications installed on it."
+    answer: "Yes. This falls under Security 'IN' the Cloud because the customer owns and maintains the guest OS, security group firewall rules, and installed applications."
   },
   {
     id: "fc-3",
     domainId: "cloud-concepts",
     question: "What is 'elasticity' in cloud computing, and how does it differ from 'scalability'?",
-    answer: "Scalability is the structural capacity to handle growth. Elasticity is the automatic matching of resource supply to real-time demand dynamically (scaling down when traffic drops to save cost)."
+    answer: "Scalability is the structural capacity to handle growth. Elasticity is the automatic matching of resource supply to real-time demand dynamically (scaling down when traffic drops to avoid waste)."
   },
   {
     id: "fc-4",
     domainId: "cloud-concepts",
     question: "What is the primary financial advantage of shifting from Capex to Opex in AWS?",
-    answer: "Instead of paying upfront capital costs for physical data centers before using them (Capex), you pay only for what you consume dynamically (Opex), improving cash flow."
+    answer: "Instead of paying upfront capital costs for physical data centers before using them (Capex), you pay only for what you consume dynamically (Opex), improving liquidity."
   },
-  
-  // Domain 2
+  {
+    id: "fc-4b",
+    domainId: "cloud-concepts",
+    question: "What are the 6 Pillars of the AWS Well-Architected Framework?",
+    answer: "1. Operational Excellence\n2. Security\n3. Reliability\n4. Performance Efficiency\n5. Cost Optimization\n6. Sustainability"
+  },
+  {
+    id: "fc-4c",
+    domainId: "cloud-concepts",
+    question: "What consists of two or more isolated data centers in a specific geographical area connected via low-latency links?",
+    answer: "An AWS Availability Zone (AZ). Multiple AZs form an AWS Region for fault isolation and high availability."
+  },
+  {
+    id: "fc-4d",
+    domainId: "cloud-concepts",
+    question: "Which AWS global infrastructure component delivers cached content closer to end users?",
+    answer: "Edge Locations (points of presence used by Amazon CloudFront CDN and AWS Global Accelerator)."
+  },
+
+  // Domain 2: Security & Compliance
   {
     id: "fc-5",
     domainId: "security-compliance",
@@ -101,7 +119,7 @@ export const initialFlashcards: Flashcard[] = [
     id: "fc-6",
     domainId: "security-compliance",
     question: "What is the primary difference between AWS WAF and AWS Shield?",
-    answer: "AWS WAF filters web traffic to protect against application exploits (Layer 7 like SQLi/XSS). AWS Shield protects against massive DDoS attacks at network and transport layers (Layers 3 & 4)."
+    answer: "AWS WAF filters web traffic to protect against application exploits (Layer 7 like SQLi/XSS). AWS Shield protects against massive DDoS attacks at network/transport layers (Layers 3 & 4)."
   },
   {
     id: "fc-7",
@@ -113,35 +131,101 @@ export const initialFlashcards: Flashcard[] = [
     id: "fc-8",
     domainId: "security-compliance",
     question: "How does Amazon GuardDuty differ from Amazon Inspector?",
-    answer: "GuardDuty is a continuous threat detection service scanning VPC, DNS, and CloudTrail logs for intrusions. Inspector is a vulnerability scanner checking EC2 instances for software CVEs."
+    answer: "GuardDuty is a continuous threat detection service analyzing VPC, DNS, and CloudTrail logs. Inspector is an automated vulnerability scanner checking EC2 and ECR container images for software CVEs."
+  },
+  {
+    id: "fc-8b",
+    domainId: "security-compliance",
+    question: "Which AWS service uses machine learning to automatically discover, classify, and protect sensitive data (PII) in S3?",
+    answer: "Amazon Macie. It scans S3 buckets for personally identifiable information (PII), API keys, and unencrypted sensitive data."
+  },
+  {
+    id: "fc-8c",
+    domainId: "security-compliance",
+    question: "What is the difference between Security Groups and Network ACLs (NACLs)?",
+    answer: "Security Groups act at the EC2 instance level and are STATEFUL (return traffic allowed automatically). Network ACLs act at the VPC Subnet level and are STATELESS (inbound & outbound rules evaluated explicitly)."
+  },
+  {
+    id: "fc-8d",
+    domainId: "security-compliance",
+    question: "What service allows central management of permissions across multiple AWS accounts using Service Control Policies (SCPs)?",
+    answer: "AWS Organizations. SCPs enforce max available permission guardrails across member accounts."
   },
 
-  // Domain 3
+  // Domain 3: Cloud Technology & Services
   {
     id: "fc-9",
     domainId: "cloud-technology",
     question: "When should you use Amazon EFS over Amazon EBS?",
-    answer: "Use EFS when you need shared file storage that can be mounted concurrently by hundreds of EC2 instances. EBS can only attach to one instance at a time (in standard usage)."
+    answer: "Use EFS when you need a shared network file system that can be mounted concurrently by hundreds of EC2 instances. EBS is a block storage volume attached to a single instance."
   },
   {
     id: "fc-10",
     domainId: "cloud-technology",
     question: "What does it mean that AWS Lambda is 'serverless'?",
-    answer: "AWS manages server allocation, patching, and scales the compute power automatically. The customer only pays for active execution time (measured in milliseconds)."
+    answer: "AWS manages server provision, OS patching, and auto-scales compute capacity. You only pay for active execution duration in milliseconds with zero pay for idle."
+  },
+  {
+    id: "fc-10b",
+    domainId: "cloud-technology",
+    question: "Which Amazon S3 storage class offers low cost for infrequently accessed data requiring millisecond retrieval?",
+    answer: "S3 Standard-Infrequent Access (S3 Standard-IA). For long-term archiving without instant retrieval needs, use S3 Glacier Flexible or Glacier Deep Archive."
+  },
+  {
+    id: "fc-10c",
+    domainId: "cloud-technology",
+    question: "Which database engine is fully managed by AWS, PostgreSQL/MySQL compatible, and 5x faster than standard MySQL?",
+    answer: "Amazon Aurora. It features automated 6-way replication across 3 AZs and auto-scaling storage up to 128 TiB."
+  },
+  {
+    id: "fc-10d",
+    domainId: "cloud-technology",
+    question: "What is the primary function of Amazon Route 53?",
+    answer: "Route 53 is a highly available and scalable Cloud Domain Name System (DNS) web service with health checking and latency-based routing."
+  },
+  {
+    id: "fc-10e",
+    domainId: "cloud-technology",
+    question: "What service provides a dedicated private physical network connection from an on-premises data center to AWS?",
+    answer: "AWS Direct Connect. It bypasses the public internet for consistent network performance and security, unlike AWS Site-to-Site VPN."
+  },
+  {
+    id: "fc-10f",
+    domainId: "cloud-technology",
+    question: "What is the difference between Amazon SQS and Amazon SNS?",
+    answer: "SQS is a message QUEUE service (decoupling applications via polling). SNS is a PUB/SUB notification service sending fan-out push messages (Email, SMS, HTTP, Lambda)."
   },
 
-  // Domain 4
+  // Domain 4: Billing & Pricing
   {
     id: "fc-11",
     domainId: "billing-pricing",
     question: "What tool should you use to receive automated alerts when your projected monthly spend crosses $200?",
-    answer: "AWS Budgets. It handles proactive budget limit configurations and email alerts."
+    answer: "AWS Budgets. It handles proactive budget limit configurations and triggers email/SNS alerts when limits are approached."
   },
   {
     id: "fc-12",
     domainId: "billing-pricing",
     question: "Who is the Technical Account Manager (TAM) and which support plan includes them?",
-    answer: "The TAM is a designated AWS engineer acting as your strategic technical advisor. They are only included in the Enterprise Support Plan."
+    answer: "The TAM is a designated AWS engineer acting as your strategic technical advocate. They are included in the Enterprise Support Plan (and Enterprise On-Ramp)."
+  },
+  {
+    id: "fc-12b",
+    domainId: "billing-pricing",
+    question: "Which tool visualizes, analyzes, and forecasts historic AWS spend patterns over the last 12 months?",
+    answer: "AWS Cost Explorer. It allows custom filtering, cost allocation tag tracking, and 12-month future spending projections."
+  },
+  {
+    id: "fc-12c",
+    domainId: "billing-pricing",
+    question: "What EC2 purchasing option offers up to 90% discount off On-Demand pricing for fault-tolerant workloads?",
+    answer: "Spot Instances. They utilize spare AWS compute capacity but can be reclaimed with a 2-minute notice."
+  },
+  {
+    id: "fc-12d",
+    domainId: "billing-pricing",
+    question: "Which AWS service analyzes configuration logs to recommend optimal AWS compute resources (EC2, Lambda, EBS) using ML?",
+    answer: "AWS Compute Optimizer. It reduces costs and improves performance by identifying underutilized or over-provisioned resources."
   }
 ];
 

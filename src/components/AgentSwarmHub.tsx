@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "motion/react";
-import { GoogleGenAI } from "@google/genai";
 import { 
   Bot, 
   Cpu, 
@@ -796,9 +795,11 @@ CORRECT CHOICE: Amazon Aurora Multi-AZ with Automatic Failover.
     setAgentNotes(prev => prev.filter(n => n.id !== noteId));
   };
 
-  const filteredNotes = activeCategoryFilter === "All" 
-    ? agentNotes 
-    : agentNotes.filter(n => n.category === activeCategoryFilter);
+  const filteredNotes = useMemo(() => {
+    return activeCategoryFilter === "All" 
+      ? agentNotes 
+      : agentNotes.filter(n => n.category === activeCategoryFilter);
+  }, [agentNotes, activeCategoryFilter]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">

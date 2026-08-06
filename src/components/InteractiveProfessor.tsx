@@ -18,8 +18,26 @@ import {
   Copy,
   Download,
   Check,
-  Play
+  Play,
+  Volume2,
+  VolumeX,
+  Pause,
+  Loader2,
+  Database,
+  HardDrive,
+  WifiOff,
+  RotateCcw,
+  FileAudio,
+  X
 } from "lucide-react";
+import { 
+  getCachedAudio, 
+  saveAudioToCache, 
+  synthesizeFallbackSpeechAudio, 
+  preloadCommonAWSDefinitions, 
+  getCacheStats, 
+  clearAudioCache 
+} from "../services/audioCacheService";
 import { 
   auth, 
   saveActiveSocraticSessionState, 
@@ -46,6 +64,25 @@ interface InteractiveProfessorProps {
   onAddMinutes?: (mins: number) => void;
   aiModelMode?: "fast" | "expert";
 }
+
+const ELEVENLABS_VOICES = [
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", label: "Professional Deep Male" },
+  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", label: "Crisp Young Male" },
+  { id: "VR6AewLTigWG4xSOukaG", name: "Arnold", label: "Authoritative Male" },
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", label: "Polished Narration Female" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", label: "Conversational Female" }
+];
+
+const cleanTextForSpeech = (text: string): string => {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // Remove bold formatting markers
+    .replace(/\*([^*]+)\*/g, "$1")     // Remove italics formatting markers
+    .replace(/`([^`]+)`/g, "$1")       // Remove inline code tags
+    .replace(/#+\s+(.+)/g, "$1")       // Remove headings markers
+    .replace(/-\s+/g, "")              // Remove bullet points
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Remove link syntax but keep label text
+    .trim();
+};
 
 const SYSTEM_INSTRUCTION = `You are 'Professor Cloud'—an elite AWS Solutions Architect and an encouraging, interactive Socratic mentor.
 
@@ -82,6 +119,86 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
   const [apiError, setApiError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ElevenLabs Voice Synthesis hooks
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => {
+    return localStorage.getItem("aws_professor_voice_id") || "pNInz6obpgDQGcFmaJgB";
+  });
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [loadingMessageId, setLoadingMessageId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Audio lifecycle cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
+
+  const handlePlaySpeech = async (messageId: string, text: string) => {
+    if (playingMessageId === messageId) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      setPlayingMessageId(null);
+      return;
+    }
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    setLoadingMessageId(messageId);
+    try {
+      const cleanedText = cleanTextForSpeech(text);
+      const response = await fetch("/api/elevenlabs/tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          text: cleanedText,
+          voiceId: selectedVoiceId
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ error: "Failed to connect to ElevenLabs proxy." }));
+        throw new Error(errData.error || "Failed to generate speech stream.");
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      
+      audio.onplay = () => {
+        setLoadingMessageId(null);
+        setPlayingMessageId(messageId);
+      };
+
+      audio.onended = () => {
+        setPlayingMessageId(null);
+      };
+
+      audio.onerror = () => {
+        setLoadingMessageId(null);
+        setPlayingMessageId(null);
+        alert("Unable to decode or load the ElevenLabs audio track.");
+      };
+
+      await audio.play();
+    } catch (error: any) {
+      console.error("Speech play error:", error);
+      setLoadingMessageId(null);
+      setPlayingMessageId(null);
+      alert(error.message || "Failed to synthesize voice with ElevenLabs. Please verify your ElevenLabs key is correct and set up.");
+    }
+  };
 
   // Retrieve stored API key or env key
   const [apiKey, setApiKey] = useState<string>(() => {
@@ -369,7 +486,29 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
         </div>
 
         {/* Header Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* ElevenLabs Voice Selection Dropdown */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300 shadow-inner">
+            <Volume2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <select
+              id="professor-voice-select"
+              value={selectedVoiceId}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedVoiceId(val);
+                localStorage.setItem("aws_professor_voice_id", val);
+              }}
+              className="bg-transparent border-none text-[10px] font-bold font-mono focus:outline-none text-slate-200 cursor-pointer pr-1"
+              title="Change Professor voice synthesis tone"
+            >
+              {ELEVENLABS_VOICES.map((v) => (
+                <option key={v.id} value={v.id} className="bg-slate-900 text-slate-100 font-sans font-semibold">
+                  Voice: {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <button
             onClick={handleExportChat}
             className="text-slate-400 hover:text-[#FF9900] text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
@@ -543,15 +682,37 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
                       )}
                     </div>
 
-                    {/* Copy Button for Model responses */}
+                    {/* Message Action Controls (Copy & Listen) for Model responses */}
                     {msg.role === "model" && (
-                      <button
-                        onClick={() => navigator.clipboard.writeText(msg.text)}
-                        className="absolute -top-2.5 -right-2.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-slate-200 text-slate-500 hover:text-[#FF9900] p-1.5 rounded-sm shadow-sm cursor-pointer"
-                        title="Copy to clipboard"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="absolute -top-3 -right-2.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 z-20">
+                        {/* ElevenLabs TTS Play/Stop Button */}
+                        <button
+                          onClick={() => handlePlaySpeech(msg.id, msg.text)}
+                          className={`bg-white border text-slate-500 p-1.5 rounded-sm shadow-sm cursor-pointer transition-colors ${
+                            playingMessageId === msg.id 
+                              ? "border-amber-500 text-amber-500 hover:text-amber-600 bg-amber-50" 
+                              : "border-slate-200 hover:text-[#FF9900]"
+                          }`}
+                          title={playingMessageId === msg.id ? "Stop reading" : "Read aloud with Socratic Professor Voice"}
+                          disabled={loadingMessageId === msg.id}
+                        >
+                          {loadingMessageId === msg.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF9900]" />
+                          ) : playingMessageId === msg.id ? (
+                            <VolumeX className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                          ) : (
+                            <Volume2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => navigator.clipboard.writeText(msg.text)}
+                          className="bg-white border border-slate-200 text-slate-500 hover:text-[#FF9900] p-1.5 rounded-sm shadow-sm cursor-pointer"
+                          title="Copy to clipboard"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
 
                     {/* INTERACTIVE QUIZ CARD (Parsed checkpoint) */}
@@ -567,7 +728,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
                         </p>
 
                         <div className="grid grid-cols-1 gap-2">
-                          {msg.quizOptions.map((opt) => {
+                          {msg.quizOptions.map((opt, optIdx) => {
                             const isSelected = msg.userSelectedAnswer === opt.key;
                             const isAnswerCorrect = opt.key === msg.quizAnswer;
                             const showResult = !!msg.userSelectedAnswer;
@@ -585,7 +746,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
 
                             return (
                               <button
-                                key={opt.key}
+                                key={`${msg.id}-${opt.key}-${optIdx}`}
                                 disabled={showResult}
                                 onClick={() => handleSelectQuizOption(msg.id, opt.key)}
                                 className={`w-full text-left p-2.5 rounded-sm border text-xs font-bold transition-all flex items-start gap-2.5 ${buttonStyle} ${!showResult && "cursor-pointer hover:translate-x-1"}`}
@@ -748,7 +909,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
                 <Flame className="w-3 h-3 text-[#FF9900]" />
                 Interactive responses add +2m study time
               </span>
-              <span>Model: {aiModelMode === "fast" ? "gemini-2.5-flash" : "gemini-1.5-pro"}</span>
+              <span>Model: {aiModelMode === "fast" ? "gemini-3.6-flash (Concise)" : "gemini-3.6-flash (Socratic)"}</span>
             </div>
 
           </div>

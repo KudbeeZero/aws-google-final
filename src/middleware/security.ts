@@ -5,6 +5,11 @@ const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS_PER_WINDOW = 120; // 120 requests per minute per IP
 
+// In-memory sliding window rate limiter for heavy AI/TTS endpoints
+const aiRateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const AI_RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_AI_REQUESTS_PER_WINDOW = 20; // 20 requests per minute per IP
+
 /**
  * Express Security Middleware for Rate Limiting
  */
@@ -32,6 +37,36 @@ export const rateLimiter = (req: Request, res: Response, next: NextFunction) => 
   record.count += 1;
   res.setHeader('X-RateLimit-Limit', MAX_REQUESTS_PER_WINDOW);
   res.setHeader('X-RateLimit-Remaining', MAX_REQUESTS_PER_WINDOW - record.count);
+  next();
+};
+
+/**
+ * Express Security Middleware for AI & Text-to-Speech Rate Limiting
+ */
+export const aiRateLimiter = (req: Request, res: Response, next: NextFunction) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown-ip';
+  const now = Date.now();
+
+  const record = aiRateLimitMap.get(clientIp);
+
+  if (!record || now > record.resetTime) {
+    aiRateLimitMap.set(clientIp, { count: 1, resetTime: now + AI_RATE_LIMIT_WINDOW_MS });
+    res.setHeader('X-AIRateLimit-Limit', MAX_AI_REQUESTS_PER_WINDOW);
+    res.setHeader('X-AIRateLimit-Remaining', MAX_AI_REQUESTS_PER_WINDOW - 1);
+    return next();
+  }
+
+  if (record.count >= MAX_AI_REQUESTS_PER_WINDOW) {
+    return res.status(429).json({
+      error: 'Too Many AI Requests',
+      message: 'Professor AI rate limit exceeded (max 20 requests/min). Please wait a moment before asking another question or playing another audio clip.',
+      retryAfterSeconds: Math.ceil((record.resetTime - now) / 1000)
+    });
+  }
+
+  record.count += 1;
+  res.setHeader('X-AIRateLimit-Limit', MAX_AI_REQUESTS_PER_WINDOW);
+  res.setHeader('X-AIRateLimit-Remaining', MAX_AI_REQUESTS_PER_WINDOW - record.count);
   next();
 };
 

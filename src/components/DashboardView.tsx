@@ -48,6 +48,7 @@ interface DashboardViewProps {
   redirectError?: string | null;
   redirectSuggestedAction?: string | null;
   redirectErrorGuide?: string | null;
+  interviewHistory?: any[];
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -72,6 +73,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   redirectError,
   redirectSuggestedAction,
   redirectErrorGuide,
+  interviewHistory = [],
 }) => {
   // Calculate statistics
   const totalCards = flashcards.length;
@@ -1056,6 +1058,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Technical Interview Archive Section */}
+      {interviewHistory && interviewHistory.length > 0 && (
+        <div className="pt-2">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+            Technical Interview Archive
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {interviewHistory.slice(0, 4).map((session, i) => (
+              <div key={session.id || i} className="bg-white border border-slate-200 p-5 rounded-sm shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 font-mono">
+                      {new Date(session.createdAt).toLocaleDateString()}
+                    </span>
+                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                      session.scorecard?.overall_rating === "Strong Hire" ? "text-emerald-700 bg-emerald-50 border-emerald-200" :
+                      session.scorecard?.overall_rating === "Hire" ? "text-blue-700 bg-blue-50 border-blue-200" :
+                      session.scorecard?.overall_rating === "Leaning No Hire" ? "text-amber-700 bg-amber-50 border-amber-200" :
+                      "text-slate-700 bg-slate-50 border-slate-200"
+                    }`}>
+                      {session.scorecard?.overall_rating || "Evaluated"}
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-slate-800 text-sm mt-1.5 leading-snug">
+                    Scenario: {session.scenarioId || "Technical Interview"}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+                    {session.scorecard?.feedback_summary || "No feedback summary available."}
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-[10px] font-medium text-slate-500">
+                    <span>Technical: {session.scorecard?.metrics?.technical_accuracy}/10</span>
+                    <span>Comm: {session.scorecard?.metrics?.communication}/10</span>
+                  </div>
+                  <button 
+                    onClick={() => onNavigateToTab("interview")}
+                    className="text-[#FF9900] hover:text-orange-600 font-bold text-[10px] uppercase tracking-wider"
+                  >
+                    View Simulator
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Badge & Milestone Achievements Section */}
       <Achievements achievementsList={achievementsList} />

@@ -153,7 +153,7 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
 
             {/* Interactive choices */}
             <div className="space-y-3">
-              {activeQuestion.options.map((opt) => {
+              {activeQuestion.options.map((opt, optIdx) => {
                 const isSelected = selectedKey === opt.key;
                 const isCorrect = opt.key === activeQuestion.correctAnswer;
                 
@@ -173,7 +173,7 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
 
                 return (
                   <div
-                    key={opt.key}
+                    key={`${activeQuestion.id}-${opt.key}-${optIdx}`}
                     onClick={() => handleSelectOption(opt.key)}
                     className={`p-3.5 border rounded-sm text-xs transition-all flex items-start gap-3 select-none ${
                       isSubmitted ? "cursor-default" : "cursor-pointer"
