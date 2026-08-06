@@ -48,7 +48,8 @@ import {
   Rocket,
   Globe,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  MoreHorizontal
 } from "lucide-react";
 import { 
   auth, 
@@ -69,6 +70,8 @@ export default function App() {
   const [showQuickStartGuide, setShowQuickStartGuide] = useState<boolean>(false);
   const [showDeployGuide, setShowDeployGuide] = useState<boolean>(false);
   const [quickStartStep, setQuickStartStep] = useState<number>(1);
+  const [showMobileMoreMenu, setShowMobileMoreMenu] = useState<boolean>(false);
+  const mainRef = React.useRef<HTMLElement>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -288,11 +291,15 @@ export default function App() {
   // Responsive tab changer
   const handleTabChange = (tab: string, domainId: string = "all") => {
     setActiveTab(tab);
+    setShowMobileMoreMenu(false);
     if (tab === "flashcards" || tab === "dashboard") {
       setSelectedDomainForFlashcards(domainId);
     }
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setSidebarOpen(false);
+    }
+    if (mainRef.current) {
+      mainRef.current.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -1004,7 +1011,7 @@ export default function App() {
         </aside>
 
         {/* Core Workspace Main Stage */}
-        <main className="flex-1 p-4 sm:p-6 min-h-0 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 p-4 sm:p-6 min-h-0 overflow-y-auto">
           
           {/* Welcome Notification Accent */}
           <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 rounded-sm flex items-start justify-between gap-4 shadow-sm mb-6 border border-slate-800">
@@ -1116,7 +1123,7 @@ export default function App() {
       </div>
       
       {/* Mobile Bottom Navigation Dock (Top of the Footer) */}
-      <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 h-14 shrink-0 flex items-center justify-around px-2 z-20 shadow-lg">
+      <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 h-14 shrink-0 flex items-center justify-around px-1 z-20 shadow-lg">
         <button 
           onClick={() => handleTabChange("dashboard")}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
@@ -1140,7 +1147,7 @@ export default function App() {
           }`}
           title="Socratic Professor"
         >
-          <Bot className="w-5 h-5 text-[#FF9900]" />
+          <Bot className={`w-5 h-5 ${activeTab === "professor" ? "text-[#FF9900]" : ""}`} />
           <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Socratic</span>
           {activeTab === "professor" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
         </button>
@@ -1160,20 +1167,6 @@ export default function App() {
         </button>
 
         <button 
-          onClick={() => handleTabChange("matching")}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
-            activeTab === "matching" 
-              ? "text-[#FF9900]" 
-              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-          }`}
-          title="Scenario Game"
-        >
-          <Zap className="w-5 h-5" />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Game</span>
-          {activeTab === "matching" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
-        </button>
-
-        <button 
           onClick={() => handleTabChange("simulator")}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
             activeTab === "simulator" 
@@ -1188,20 +1181,6 @@ export default function App() {
         </button>
 
         <button 
-          onClick={() => handleTabChange("agents")}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
-            activeTab === "agents" 
-              ? "text-emerald-500" 
-              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-          }`}
-          title="AI Swarm Platform"
-        >
-          <Cpu className="w-5 h-5 text-emerald-500" />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Swarm</span>
-          {activeTab === "agents" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full" />}
-        </button>
-
-        <button 
           onClick={() => handleTabChange("algorand")}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
             activeTab === "algorand" 
@@ -1211,10 +1190,127 @@ export default function App() {
           title="Algorand Web3"
         >
           <Wallet className="w-5 h-5" />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Pera Web3</span>
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Web3</span>
           {activeTab === "algorand" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-yellow-500 rounded-full" />}
         </button>
+
+        <button 
+          onClick={() => setShowMobileMoreMenu(!showMobileMoreMenu)}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+            ["matching", "interview", "agents", "vault", "backup"].includes(activeTab) || showMobileMoreMenu
+              ? "text-[#FF9900]" 
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+          title="More AWS Tools"
+        >
+          <MoreHorizontal className="w-5 h-5" />
+          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Tools</span>
+          {(["matching", "interview", "agents", "vault", "backup"].includes(activeTab) || showMobileMoreMenu) && (
+            <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />
+          )}
+        </button>
       </div>
+
+      {/* Mobile Tools Sheet Overlay */}
+      {showMobileMoreMenu && (
+        <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs md:hidden flex flex-col justify-end animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-xl p-5 space-y-4 max-h-[80vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-[#FF9900] text-slate-950 rounded-xs flex items-center justify-center font-black text-xs">
+                  AWS
+                </div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                  All AWS Workspace Tools
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowMobileMoreMenu(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                onClick={() => handleTabChange("matching")}
+                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
+                  activeTab === "matching"
+                    ? "bg-[#FF9900]/10 border-[#FF9900] text-slate-900 dark:text-white font-bold"
+                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                <Zap className="w-5 h-5 text-[#FF9900] shrink-0" />
+                <div>
+                  <div className="text-xs font-bold">Scenario Matcher Game</div>
+                  <div className="text-[10px] text-slate-400">Match real-world AWS scenarios to architectural services</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleTabChange("interview")}
+                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
+                  activeTab === "interview"
+                    ? "bg-[#FF9900]/10 border-[#FF9900] text-slate-900 dark:text-white font-bold"
+                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                <Briefcase className="w-5 h-5 text-amber-500 shrink-0" />
+                <div>
+                  <div className="text-xs font-bold">HONE Technical Interview Prep</div>
+                  <div className="text-[10px] text-slate-400">Simulate AWS architectural technical defense interviews</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleTabChange("agents")}
+                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
+                  activeTab === "agents"
+                    ? "bg-emerald-500/10 border-emerald-500 text-slate-900 dark:text-white font-bold"
+                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                <Cpu className="w-5 h-5 text-emerald-500 shrink-0" />
+                <div>
+                  <div className="text-xs font-bold">AI Agent Swarm Platform</div>
+                  <div className="text-[10px] text-slate-400">Multi-agent cloud architect design workspace</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleTabChange("vault")}
+                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
+                  activeTab === "vault"
+                    ? "bg-[#FF9900]/10 border-[#FF9900] text-slate-900 dark:text-white font-bold"
+                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                <HelpCircle className="w-5 h-5 text-sky-500 shrink-0" />
+                <div>
+                  <div className="text-xs font-bold">The Distractor Vault</div>
+                  <div className="text-[10px] text-slate-400">Deconstruct tricky exam distractor choices</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleTabChange("backup")}
+                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
+                  activeTab === "backup"
+                    ? "bg-[#FF9900]/10 border-[#FF9900] text-slate-900 dark:text-white font-bold"
+                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                <Database className="w-5 h-5 text-indigo-500 shrink-0" />
+                <div>
+                  <div className="text-xs font-bold">Save Slots & Backups</div>
+                  <div className="text-[10px] text-slate-400">Cloud database sync, exports, and offline backups</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal 1: 10-Minute Rapid Onboarding Walkthrough */}
       {showQuickStartGuide && (

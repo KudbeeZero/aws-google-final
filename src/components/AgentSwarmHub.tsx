@@ -34,8 +34,41 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
-  Plus
+  Plus,
+  GitFork,
+  Workflow,
+  Sliders,
+  Gauge,
+  FileCode,
+  ShieldAlert,
+  ListChecks,
+  ArrowDown,
+  ExternalLink,
+  CheckCircle2,
+  X
 } from "lucide-react";
+
+export interface WorkflowNode {
+  id: string;
+  type: "trigger" | "agent" | "tool" | "condition";
+  title: string;
+  subtitle: string;
+  iconBg: string;
+  badge: string;
+  status?: "idle" | "running" | "completed" | "failed";
+  details?: string;
+}
+
+export interface AutonomousWorkflow {
+  id: string;
+  name: string;
+  description: string;
+  category: "Resilience" | "FinOps" | "Exam Drills";
+  triggerEvent: string;
+  nodes: WorkflowNode[];
+  evaluationScore?: number;
+  lastExecutionDurationMs?: number;
+}
 
 interface Agent {
   id: string;
@@ -173,6 +206,159 @@ const INITIAL_NOTES: AgentNote[] = [
   }
 ];
 
+const DEFAULT_WORKFLOWS: AutonomousWorkflow[] = [
+  {
+    id: "wf-1",
+    name: "Autonomous Multi-Region Resilience & Architecture Audit",
+    category: "Resilience",
+    description: "Triggers on AWS Config or CloudTrail topology drift, dispatches Archie and Guardian to generate zero-trust multi-AZ solution blueprints.",
+    triggerEvent: "AWS CloudTrail Event: Architecture Topology Drift Detected in us-east-1",
+    evaluationScore: 98.4,
+    lastExecutionDurationMs: 420,
+    nodes: [
+      {
+        id: "node-1-1",
+        type: "trigger",
+        title: "CloudTrail & AWS Config Trigger",
+        subtitle: "Monitors EC2/ALB state changes across AZs",
+        iconBg: "bg-purple-600",
+        badge: "Event Trigger",
+        details: "Filter: eventSource = ec2.amazonaws.com & eventName = RunInstances"
+      },
+      {
+        id: "node-1-2",
+        type: "agent",
+        title: "Archie (Lead Solutions Architect)",
+        subtitle: "Evaluates Multi-AZ fault isolation and ALB health checks",
+        iconBg: "bg-blue-600",
+        badge: "Agent Node",
+        details: "Evaluates subnet distribution, Route 53 DNS failover latency, and Aurora Multi-AZ replication."
+      },
+      {
+        id: "node-1-3",
+        type: "agent",
+        title: "Guardian (SecOps Agent)",
+        subtitle: "Audits IAM Roles, WAF rules, and KMS key rotation",
+        iconBg: "bg-emerald-600",
+        badge: "Agent Node",
+        details: "Checks for public S3 bucket policies and verifies TLS 1.3 encryption in transit."
+      },
+      {
+        id: "node-1-4",
+        type: "tool",
+        title: "AWS Topology Diagram Synthesizer",
+        subtitle: "Renders ASCII/SVG architectural blueprints & CloudFormation snippets",
+        iconBg: "bg-[#FF9900]",
+        badge: "Tool Execution",
+        details: "Invokes Gemini API code generation tool to compile IaC templates."
+      },
+      {
+        id: "node-1-5",
+        type: "condition",
+        title: "Resilience Guardrail Gate (> 95% Pass)",
+        subtitle: "Verifies zero single points of failure before publishing blueprint",
+        iconBg: "bg-teal-600",
+        badge: "Decision Gate",
+        details: "Threshold: 0 Critical IAM vulnerabilities & > 99.99% SLA architecture."
+      }
+    ]
+  },
+  {
+    id: "wf-2",
+    name: "Autonomous Cloud Cost Guardrails & Waste Killer",
+    category: "FinOps",
+    description: "Detects AWS billing spikes or unattached EBS volumes, dispatches PennyWise for Spot/Savings Plan optimization, and applies automated budget caps.",
+    triggerEvent: "AWS Budgets Alert: Daily Spend Threshold breached 80% limit",
+    evaluationScore: 96.8,
+    lastExecutionDurationMs: 380,
+    nodes: [
+      {
+        id: "node-2-1",
+        type: "trigger",
+        title: "AWS Budgets & Cost Anomaly Alert",
+        subtitle: "Listens for real-time CloudWatch billing alerts",
+        iconBg: "bg-amber-600",
+        badge: "Event Trigger",
+        details: "Metric: EstimatedCharges > $150.00 within 24-hour sliding window"
+      },
+      {
+        id: "node-2-2",
+        type: "agent",
+        title: "PennyWise (FinOps Agent)",
+        subtitle: "Scans unattached EBS volumes, idle EC2s, and compute commitments",
+        iconBg: "bg-[#FF9900]",
+        badge: "Agent Node",
+        details: "Calculates Compute Savings Plans vs Spot Instances and identifies idle NAT Gateways."
+      },
+      {
+        id: "node-2-3",
+        type: "agent",
+        title: "Guardian (SecOps Agent)",
+        subtitle: "Verifies cost policy changes do not breach security baselines",
+        iconBg: "bg-emerald-600",
+        badge: "Agent Node",
+        details: "Ensures terminating idle EC2 instances does not break bastion host access or logging agents."
+      },
+      {
+        id: "node-2-4",
+        type: "tool",
+        title: "AWS Cost Anomaly Action Item Generator",
+        subtitle: "Produces actionable CLI commands to purge waste",
+        iconBg: "bg-blue-600",
+        badge: "Tool Execution",
+        details: "Generates aws ec2 release-address and aws ec2 delete-volume scripts."
+      }
+    ]
+  },
+  {
+    id: "wf-3",
+    name: "Autonomous Exam Trap Deconstruction & Socratic Drill",
+    category: "Exam Drills",
+    description: "Automated study pipeline that generates CLF-C02 distractor scenarios, invites Alex for active recall probing, and syncs flashcards.",
+    triggerEvent: "Scheduled Daily Study Trigger (08:00 AM UTC)",
+    evaluationScore: 99.1,
+    lastExecutionDurationMs: 290,
+    nodes: [
+      {
+        id: "node-3-1",
+        type: "trigger",
+        title: "Scheduled Exam Preparation Trigger",
+        subtitle: "Fires daily or on-demand before study sessions",
+        iconBg: "bg-cyan-600",
+        badge: "Cron Schedule",
+        details: "Schedule: 0 8 * * 1-5 (Every weekday morning)"
+      },
+      {
+        id: "node-3-2",
+        type: "agent",
+        title: "TrapMaster (Distractor Specialist)",
+        subtitle: "Synthesizes subtle AWS CLF-C02 exam traps & trick choices",
+        iconBg: "bg-purple-600",
+        badge: "Agent Node",
+        details: "Target topics: Global vs Regional services, TAM vs Concierge, S3 storage class edge cases."
+      },
+      {
+        id: "node-3-3",
+        type: "agent",
+        title: "Alex (Socratic Mentor)",
+        subtitle: "Presents step-by-step reasoning breakdown & active recall question",
+        iconBg: "bg-indigo-600",
+        badge: "Agent Node",
+        details: "Prompts candidate to explain why false distractors are incorrect using AWS Shared Responsibility."
+      },
+      {
+        id: "node-3-4",
+        type: "tool",
+        title: "Flashcard & Vault Auto-Persist Tool",
+        subtitle: "Stores deconstructed traps directly into user candidate deck",
+        iconBg: "bg-emerald-600",
+        badge: "Tool Execution",
+        details: "Persists into local state & cloud sync for spaced repetition."
+      }
+    ]
+  }
+];
+
 interface AgentSwarmHubProps {
   user: any;
   aiModelMode: "fast" | "expert";
@@ -185,6 +371,15 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
     const saved = localStorage.getItem("aws_agent_notes_v1");
     return saved ? JSON.parse(saved) : INITIAL_NOTES;
   });
+
+  // Copilot Studio Workflow Canvas States
+  const [hubViewMode, setHubViewMode] = useState<"knowledge" | "copilot-workflows">("knowledge");
+  const [workflows, setWorkflows] = useState<AutonomousWorkflow[]>(DEFAULT_WORKFLOWS);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<AutonomousWorkflow>(DEFAULT_WORKFLOWS[0]);
+  const [activeRunningNodeId, setActiveRunningNodeId] = useState<string | null>(null);
+  const [isEvaluatingWorkflow, setIsEvaluatingWorkflow] = useState<boolean>(false);
+  const [workflowLogs, setWorkflowLogs] = useState<string[]>([]);
+  const [workflowArtifact, setWorkflowArtifact] = useState<string | null>(null);
 
   const [promptInput, setPromptInput] = useState<string>("");
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -247,6 +442,112 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
     } finally {
       setIsIssuingCertificate(false);
     }
+  };
+
+  // Copilot Studio Autonomous Workflow Execution Engine
+  const handleRunWorkflowEvaluation = async () => {
+    if (isEvaluatingWorkflow) return;
+    setIsEvaluatingWorkflow(true);
+    setWorkflowLogs([]);
+    setWorkflowArtifact(null);
+
+    const startTime = performance.now();
+    const logs: string[] = [];
+
+    logs.push(`[${new Date().toLocaleTimeString()}] [HARNESS: INIT] Launching Copilot Studio Autonomous Agent Workflow Harness: "${selectedWorkflow.name}"`);
+    logs.push(`[${new Date().toLocaleTimeString()}] [TRIGGER: LISTEN] ${selectedWorkflow.triggerEvent}`);
+    setWorkflowLogs([...logs]);
+
+    for (let i = 0; i < selectedWorkflow.nodes.length; i++) {
+      const node = selectedWorkflow.nodes[i];
+      setActiveRunningNodeId(node.id);
+
+      await new Promise((r) => setTimeout(r, 700));
+
+      logs.push(`[${new Date().toLocaleTimeString()}] [NODE ${i + 1}/${selectedWorkflow.nodes.length}: ${node.badge.toUpperCase()}] Executing "${node.title}"`);
+      logs.push(`   ├─ Detail: ${node.details || node.subtitle}`);
+      
+      if (node.type === "agent") {
+        logs.push(`   └─ Multi-Tool Execution: Formulating long-horizon reasoning context & verifying guardrails...`);
+      } else if (node.type === "tool") {
+        logs.push(`   └─ Tool Output: Synthesized IaC JSON / AWS CLI payload (Latency: ${Math.floor(Math.random() * 40 + 20)}ms)`);
+      } else if (node.type === "condition") {
+        logs.push(`   └─ Guardrail Decision: Passed evaluation metrics with score 100%. Proceeding to artifact release.`);
+      }
+
+      setWorkflowLogs([...logs]);
+    }
+
+    setActiveRunningNodeId(null);
+    const endTime = performance.now();
+    const duration = Math.round(endTime - startTime);
+
+    logs.push(`[${new Date().toLocaleTimeString()}] [EVALUATION COMPLETE] Workflow executed successfully in ${duration}ms with Reasoning Quality Score: ${selectedWorkflow.evaluationScore}%`);
+    setWorkflowLogs([...logs]);
+
+    // Generate output artifact based on workflow category
+    if (selectedWorkflow.category === "Resilience") {
+      setWorkflowArtifact(`// AUTONOMOUSLY SYNTHESIZED MULTI-AZ ARCHITECTURE BLUEPRINT (AWS CLOUD FORMATION)
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-AZ High Availability Web Stack generated by Archie & Guardian'
+
+Resources:
+  PublicALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Subnets: [ !Ref PublicSubnetAZ1, !Ref PublicSubnetAZ2 ]
+      SecurityGroups: [ !Ref ALBSecurityGroup ]
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: [ !Ref PrivateSubnetAZ1, !Ref PrivateSubnetAZ2 ]
+      MinSize: '2'
+      MaxSize: '10'
+      DesiredCapacity: '2'
+      TargetGroupARNs: [ !Ref ALBTargetGroup ]
+
+  AuroraDatabaseCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-postgresql
+      MultiAZ: true
+      DatabaseName: AppProdDB
+      StorageEncrypted: true
+
+// GUARDRAIL AUDIT STATUS: PASSED (0 S3 public buckets, KMS Key Rotation enabled)`);
+    } else if (selectedWorkflow.category === "FinOps") {
+      setWorkflowArtifact(`# AUTONOMOUS FINOPS WASTE-KILLER REPORT & AWS CLI REMEDIATION SCRIPT
+# Generated by PennyWise & Guardian
+
+# 1. Purge Idle Elastic IPs
+aws ec2 release-address --allocation-id eipalloc-09f823a1bc4 --region us-east-1
+
+# 2. Delete Unattached EBS Volumes (> 30 days idle)
+aws ec2 delete-volume --volume-id vol-0a1b2c3d4e5f6g7h8 --region us-east-1
+
+# 3. Compute Savings Plan Recommendation
+# Commitment: $12.50/hr (1-Year All Upfront Compute Savings Plan)
+# Estimated Monthly Net Savings: $648.20 / month (58.4% reduction vs On-Demand)
+
+# GUARDRAIL STATUS: All proposed terminations checked against active EC2 tags.`);
+    } else {
+      setWorkflowArtifact(`// AUTONOMOUS EXAM TRAP DECONSTRUCTION & SOCRATIC DRILL
+// Generated by TrapMaster & Alex
+
+TRAP SCENARIO: A candidate needs to migrate a legacy MySQL DB requiring zero downtime, automatic failover across Availability Zones, and minimal operational overhead.
+
+FALSE DISTRACTOR #1: Deploy MySQL on an EC2 instance in a single AZ with S3 backup script.
+   -> WHY TRICKY: Sounds easy, but single AZ has no automatic failover (SLA fail).
+FALSE DISTRACTOR #2: Use AWS Redshift Multi-Node cluster.
+   -> WHY TRICKY: Redshift is an OLAP Data Warehouse, not an OLTP database.
+
+CORRECT CHOICE: Amazon Aurora Multi-AZ with Automatic Failover.
+   -> REASONING: Aurora replicates 6 copies of data across 3 AZs and handles failover in < 30s autonomously.`);
+    }
+
+    setIsEvaluatingWorkflow(false);
   };
 
   // Master Cheat Sheet Distiller Handler
@@ -554,7 +855,41 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
         </div>
       </div>
 
-      {/* System Evolution Roadmap & Phases Section */}
+      {/* View Mode Mode Switcher Bar */}
+      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setHubViewMode("knowledge")}
+            className={`px-4 py-2 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center gap-2 ${
+              hubViewMode === "knowledge"
+                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+            }`}
+          >
+            <Bot className="w-4 h-4 text-[#FF9900]" />
+            Agent Roster & Knowledge Exchange
+          </button>
+
+          <button
+            onClick={() => setHubViewMode("copilot-workflows")}
+            className={`px-4 py-2 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center gap-2 relative ${
+              hubViewMode === "copilot-workflows"
+                ? "bg-purple-600 text-white shadow-md"
+                : "bg-purple-950/20 text-purple-400 border border-purple-800/60 hover:bg-purple-900/40"
+            }`}
+          >
+            <Workflow className="w-4 h-4" />
+            Copilot Studio Autonomous Workflows
+            <span className="text-[9px] bg-purple-400/20 text-purple-300 font-mono px-1.5 py-0.2 rounded-xs border border-purple-400/30">
+              NEW
+            </span>
+          </button>
+        </div>
+
+        <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+          {hubViewMode === "copilot-workflows" ? "Copilot Studio Harness Active" : "5 Domain Experts Online"}
+        </span>
+      </div>
       {showRoadmap && (
         <motion.div 
           initial={{ opacity: 0, height: 0 }}
@@ -646,7 +981,8 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
       )}
 
       {/* Main Grid: Agent Selector on Left, Dispatcher & Notes on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {hubViewMode === "knowledge" && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Left Column: Agent Council Roster (4 columns) */}
         <div className="lg:col-span-4 space-y-4">
@@ -1234,6 +1570,228 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
         </div>
 
       </div>
+      )}
+
+      {/* View Mode 2: Copilot Studio Autonomous Agent Workflows Canvas */}
+      {hubViewMode === "copilot-workflows" && (
+        <div className="space-y-6 animate-fade-in">
+          
+          {/* Top Banner & Preset Selector */}
+          <div className="bg-slate-900 border border-purple-800/80 p-6 rounded-sm space-y-4 shadow-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="bg-purple-500/20 text-purple-300 font-mono text-[9px] font-black px-2 py-0.5 rounded-xs uppercase tracking-widest border border-purple-500/40 flex items-center gap-1">
+                    <Workflow className="w-3 h-3 text-purple-400" />
+                    Copilot Studio Autonomous Harness
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Evaluation Engine v3.6
+                  </span>
+                </div>
+                <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                  <GitFork className="w-5 h-5 text-purple-400" />
+                  Autonomous Agent Workflows & Multi-Tool Execution Canvas
+                </h3>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Construct and evaluate complex, long-horizon multi-agent workflows. Connect triggers, domain agent reasoning nodes, AWS tool execution, and guardrail decision gates inspired by Microsoft Copilot Studio autonomous capabilities.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={handleRunWorkflowEvaluation}
+                  disabled={isEvaluatingWorkflow}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs rounded-xs shadow-lg flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isEvaluatingWorkflow ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Evaluating Workflow...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 fill-white" />
+                      Run Autonomous Evaluation
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Workflow Preset Switcher Pills */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold uppercase text-slate-400 font-mono block">
+                Select Autonomous Business Process Workflow:
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {workflows.map((wf) => {
+                  const isSelected = selectedWorkflow.id === wf.id;
+                  return (
+                    <button
+                      key={wf.id}
+                      onClick={() => {
+                        setSelectedWorkflow(wf);
+                        setWorkflowArtifact(null);
+                        setWorkflowLogs([]);
+                      }}
+                      className={`p-3.5 rounded-xs border text-left transition-all cursor-pointer relative ${
+                        isSelected
+                          ? "bg-purple-950/60 border-purple-500 text-white ring-1 ring-purple-500/50 shadow-md"
+                          : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="text-[9px] font-black uppercase text-purple-400 font-mono bg-purple-900/40 border border-purple-800 px-1.5 py-0.5 rounded-xs">
+                          {wf.category}
+                        </span>
+                        <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 font-bold">
+                          <Gauge className="w-3 h-3" />
+                          <span>{wf.evaluationScore}% Score</span>
+                        </div>
+                      </div>
+                      <h4 className="font-extrabold text-xs text-white leading-tight mb-1">
+                        {wf.name}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                        {wf.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Visual Workflow Canvas Pipeline */}
+          <div className="bg-slate-950 border border-slate-800 p-6 rounded-sm space-y-6 shadow-lg relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-purple-400" />
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-200">
+                  Visual Workflow Execution Pipeline ({selectedWorkflow.nodes.length} Connected Nodes)
+                </h4>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400">
+                Trigger: <span className="text-purple-300 font-bold">{selectedWorkflow.triggerEvent}</span>
+              </span>
+            </div>
+
+            {/* Pipeline Visual Node Flow Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative">
+              {selectedWorkflow.nodes.map((node, idx) => {
+                const isRunning = activeRunningNodeId === node.id;
+                return (
+                  <div key={node.id} className="flex flex-col items-center relative">
+                    <div
+                      className={`w-full p-4 rounded-xs border transition-all space-y-2 relative ${
+                        isRunning
+                          ? "bg-purple-900/80 border-purple-400 text-white ring-2 ring-purple-400 shadow-xl scale-105 z-10"
+                          : "bg-slate-900 border-slate-800 text-slate-200"
+                      }`}
+                    >
+                      {/* Node Type Badge */}
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[8px] font-black uppercase text-white font-mono px-1.5 py-0.5 rounded-xs ${node.iconBg}`}>
+                          {node.badge}
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-400">
+                          Step {idx + 1}
+                        </span>
+                      </div>
+
+                      {/* Node Title & Subtitle */}
+                      <div>
+                        <h5 className="font-extrabold text-xs text-white leading-snug">
+                          {node.title}
+                        </h5>
+                        <p className="text-[10px] text-slate-400 leading-normal mt-1">
+                          {node.subtitle}
+                        </p>
+                      </div>
+
+                      {/* Detail Pill */}
+                      {node.details && (
+                        <div className="bg-slate-950/80 p-2 rounded-xs border border-slate-800/80 font-mono text-[9px] text-slate-300">
+                          {node.details}
+                        </div>
+                      )}
+
+                      {/* Active Status Halo Indicator */}
+                      {isRunning && (
+                        <div className="flex items-center gap-1.5 text-purple-300 text-[10px] font-bold font-mono animate-pulse pt-1">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Executing Reasoner...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Arrow Connector (between cards on desktop) */}
+                    {idx < selectedWorkflow.nodes.length - 1 && (
+                      <div className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 text-purple-400">
+                        <ArrowRight className="w-5 h-5 bg-slate-950 rounded-full p-0.5 border border-purple-800" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Execution Telemetry Console & Logs */}
+            {workflowLogs.length > 0 && (
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-xs font-mono text-xs space-y-2">
+                <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-2">
+                  <span className="text-[10px] font-bold uppercase text-purple-400 flex items-center gap-1.5">
+                    <Terminal className="w-3.5 h-3.5" />
+                    Copilot Studio Evaluation Telemetry
+                  </span>
+                  <span className="text-[9px] text-slate-500">Autonomous Reasoning Trace</span>
+                </div>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {workflowLogs.map((log, i) => (
+                    <div key={i} className="text-slate-200 text-[11px] leading-relaxed">
+                      {log}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Generated Output Artifact Pane */}
+            {workflowArtifact && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-slate-900 border border-emerald-500/60 p-5 rounded-xs space-y-3 shadow-xl"
+              >
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-black uppercase text-emerald-400 font-mono tracking-wider">
+                      Autonomously Synthesized Workflow Artifact
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(workflowArtifact);
+                      alert("Artifact copied to clipboard!");
+                    }}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-[10px] rounded-xs flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Copy Artifact
+                  </button>
+                </div>
+
+                <pre className="text-xs text-emerald-300 font-mono whitespace-pre-wrap leading-relaxed bg-slate-950 p-4 rounded-xs border border-slate-800 max-h-72 overflow-y-auto">
+                  {workflowArtifact}
+                </pre>
+              </motion.div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

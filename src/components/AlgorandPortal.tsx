@@ -39,6 +39,7 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
 }) => {
   // Pera Wallet connection states
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string>("");
   const [manualAddress, setManualAddress] = useState("");
   const [activeTab, setActiveTab] = useState<"explorer" | "wallet">("explorer");
@@ -142,6 +143,7 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
   // Handle Pera Wallet connection
   const handlePeraConnect = async () => {
     setIsConnecting(true);
+    setConnectionError(null);
     try {
       const newAccounts = await peraWallet.connect();
       if (newAccounts.length > 0) {
@@ -153,11 +155,22 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
       }
     } catch (error: any) {
       if (error?.data?.type !== "CONNECT_MODAL_CLOSED") {
-        console.error("Pera Wallet connection failed", error);
+        console.warn("Pera Wallet connection notice:", error);
+        setConnectionError("Pera Connect popup was blocked or unavailable. You can also generate a TestNet Developer Wallet below!");
       }
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  const handleGenerateTestNetWallet = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    const testAddress = "TEST" + Array.from({ length: 50 }, () => chars[Math.floor(Math.random() * chars.length)]).join("") + "ALGO";
+    setWalletAddress(testAddress);
+    localStorage.setItem("aws_algorand_wallet_address", testAddress);
+    onAlgorandLogin(testAddress, `TestNet Wallet (${testAddress.slice(0, 4)}...${testAddress.slice(-4)})`);
+    setActiveTab("wallet");
+    setConnectionError(null);
   };
 
   const handleManualConnect = (e: React.FormEvent) => {
@@ -513,28 +526,58 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
         {activeTab === "wallet" && (
           <div className="lg:col-span-12 space-y-6">
             {!walletAddress ? (
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 text-center space-y-4 rounded-sm">
-                <Wallet className="w-12 h-12 text-slate-300 mx-auto" />
-                <h3 className="text-base font-extrabold text-slate-800 dark:text-white">Your Pera Wallet is not connected</h3>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  Connect your Pera Wallet using the yellow button in the header, or manually input a public Algorand address below to configure your credential syncing session.
-                </p>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 text-center space-y-5 rounded-sm shadow-sm">
+                <Wallet className="w-12 h-12 text-yellow-500 mx-auto" />
+                <div className="space-y-1">
+                  <h3 className="text-base font-extrabold text-slate-800 dark:text-white">Connect Your Algorand Wallet</h3>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    Connect your Pera Wallet mobile app, generate a 1-click TestNet developer wallet, or manually input a public address to sync your credentials.
+                  </p>
+                </div>
 
-                <form onSubmit={handleManualConnect} className="max-w-md mx-auto flex items-center gap-2 mt-4">
-                  <input 
-                    type="text" 
-                    placeholder="Enter manual public address..."
-                    value={manualAddress}
-                    onChange={(e) => setManualAddress(e.target.value)}
-                    className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-sm px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500 font-mono"
-                  />
-                  <button 
-                    type="submit"
-                    className="px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-sm shrink-0 transition-all cursor-pointer"
+                {connectionError && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 p-3 rounded-sm text-xs max-w-md mx-auto font-medium">
+                    {connectionError}
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto">
+                  <button
+                    onClick={handlePeraConnect}
+                    disabled={isConnecting}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-sm flex items-center justify-center gap-2 shadow-md hover:scale-[1.01] transition-all cursor-pointer"
                   >
-                    Submit
+                    <Wallet className="w-4 h-4" />
+                    {isConnecting ? "Connecting..." : "Connect Pera Wallet"}
                   </button>
-                </form>
+
+                  <button
+                    onClick={handleGenerateTestNetWallet}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-sm flex items-center justify-center gap-2 shadow-md hover:scale-[1.01] transition-all cursor-pointer"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    Generate TestNet Wallet
+                  </button>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 max-w-md mx-auto">
+                  <span className="text-[10px] text-slate-400 font-mono block mb-2 uppercase tracking-wider font-bold">Or enter a public address</span>
+                  <form onSubmit={handleManualConnect} className="flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Algorand TestNet address..."
+                      value={manualAddress}
+                      onChange={(e) => setManualAddress(e.target.value)}
+                      className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-sm px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-yellow-500 font-mono"
+                    />
+                    <button 
+                      type="submit"
+                      className="px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-sm shrink-0 transition-all cursor-pointer"
+                    >
+                      Connect
+                    </button>
+                  </form>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

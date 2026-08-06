@@ -513,7 +513,7 @@ export const syncStreakToLeaderboard = async (
 export const getLeaderboard = async (): Promise<LeaderboardEntry[]> => {
   try {
     const leaderboardCol = collection(db, "leaderboard");
-    const q = query(leaderboardCol, orderBy("streak", "desc"), limit(5));
+    const q = query(leaderboardCol, orderBy("streak", "desc"), limit(25));
     const querySnapshot = await getDocs(q);
     const entries: LeaderboardEntry[] = [];
     querySnapshot.forEach((doc) => {
@@ -529,7 +529,26 @@ export const getLeaderboard = async (): Promise<LeaderboardEntry[]> => {
     });
     return entries;
   } catch (error) {
-    console.error("Failed to fetch leaderboard:", error);
-    return [];
+    console.warn("Ordered leaderboard query failed, falling back to un-ordered query:", error);
+    try {
+      const leaderboardCol = collection(db, "leaderboard");
+      const querySnapshot = await getDocs(leaderboardCol);
+      const entries: LeaderboardEntry[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        entries.push({
+          userId: data.userId || doc.id,
+          displayName: data.displayName || "Cloud Learner",
+          email: data.email || "",
+          photoURL: data.photoURL || "",
+          streak: Number(data.streak) || 0,
+          updatedAt: data.updatedAt || ""
+        });
+      });
+      return entries.sort((a, b) => b.streak - a.streak).slice(0, 25);
+    } catch (fallbackError) {
+      console.error("Failed to fetch leaderboard in fallback mode:", fallbackError);
+      return [];
+    }
   }
 };

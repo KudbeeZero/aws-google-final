@@ -769,9 +769,9 @@ Evaluate the user's response. Provide deep Socratic architectural analysis. Grad
     setHasSubmitted(true);
   };
 
-  const totalRoadmapCount = roadmapItems.length;
+  const totalRoadmapCount = roadmapItems.length || 1;
   const completedRoadmapCount = roadmapItems.filter((i: any) => i.completed).length;
-  const roadmapPercent = Math.round((completedRoadmapCount / totalRoadmapCount) * 100);
+  const roadmapPercent = isNaN(completedRoadmapCount) || isNaN(totalRoadmapCount) || totalRoadmapCount === 0 ? 0 : Math.round((completedRoadmapCount / totalRoadmapCount) * 100);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -1340,7 +1340,7 @@ Evaluate the user's response. Provide deep Socratic architectural analysis. Grad
                       className="stroke-[#FF9900] fill-none transition-all duration-500" 
                       strokeWidth="6" 
                       strokeDasharray="213.6" 
-                      strokeDashoffset={213.6 - (213.6 * roadmapPercent) / 100} 
+                      strokeDashoffset={String(213.6 - (213.6 * (isNaN(roadmapPercent) ? 0 : roadmapPercent)) / 100)} 
                     />
                   </svg>
                   <span className="absolute font-black text-sm text-slate-100">{roadmapPercent}%</span>
