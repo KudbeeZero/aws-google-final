@@ -4,13 +4,23 @@ import { DistractorItem } from "../types";
 
 interface TheDistractorVaultProps {
   vaultItems: DistractorItem[];
+  savedState?: any;
+  onSaveState?: (state: any) => void;
 }
 
 export const TheDistractorVault: React.FC<TheDistractorVaultProps> = ({
   vaultItems,
+  savedState,
+  onSaveState
 }) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchTerm, setSearchTerm] = useState(savedState?.searchTerm || "");
+  const [selectedCategory, setSelectedCategory] = useState(savedState?.selectedCategory || "all");
+
+  React.useEffect(() => {
+    if (onSaveState) {
+      onSaveState({ searchTerm, selectedCategory });
+    }
+  }, [searchTerm, selectedCategory, onSaveState]);
 
   // Get unique categories for filtering
   const categories: string[] = ["all", ...(Array.from(new Set(vaultItems.map((item) => item.category))) as string[])];

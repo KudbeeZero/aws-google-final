@@ -40,6 +40,84 @@ async function startServer() {
   app.use(express.json({ limit: "1mb" })); // Prevent volumetric payload attacks
   app.use("/api", promptInjectionGuard);
 
+  // Basic in-memory BUSCACHE layer to avoid repeating identical LLM queries
+  const busCache = new Map<string, any>();
+
+  // API: Socratic Professor Chat
+  app.post("/api/gemini/professor-chat", async (req, res) => {
+    try {
+      const { contents, aiModelMode, systemInstruction } = req.body;
+      
+      if (!process.env.GEMINI_API_KEY) {
+        return res.json({
+          text: "[Answer: A]\n\nSimulated Professor Cloud: It seems my server-side Gemini API key isn't configured in AI Studio Settings. Please configure it to unlock real AI responses. For now, here is a simulated concept check:\n\nA) Mock Correct Answer\nB) Distractor 1\nC) Distractor 2\nD) Distractor 3\n\n[Answer: A]"
+        });
+      }
+
+      // Generate cache key based on contents
+      const cacheKey = JSON.stringify(contents);
+      if (busCache.has(cacheKey)) {
+        console.log("Serving from BUSCACHE layer");
+        return res.json(busCache.get(cacheKey));
+      }
+
+      const ai = getGeminiClient();
+      const response = await ai.models.generateContent({
+        model: aiModelMode === "fast" ? "gemini-2.5-flash" : "gemini-1.5-pro",
+        contents,
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: 0.7,
+        }
+      });
+
+      const result = { text: response.text };
+      // Store in busCache
+      busCache.set(cacheKey, result);
+      
+      res.json(result);
+    } catch (err: any) {
+      console.error("Gemini API Error:", err);
+      res.status(500).json({ error: err.message || "Failed to contact Gemini API" });
+    }
+  });
+
+  // API: Technical Interview Evaluation
+  app.post("/api/gemini/evaluate-interview", async (req, res) => {
+    try {
+      const { prompt, aiModelMode, systemInstruction, responseSchema } = req.body;
+      
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(400).json({ error: "GEMINI_API_KEY not configured" });
+      }
+
+      // Generate cache key
+      const cacheKey = JSON.stringify({ prompt, aiModelMode });
+      if (busCache.has(cacheKey)) {
+        return res.json(busCache.get(cacheKey));
+      }
+
+      const ai = getGeminiClient();
+      const response = await ai.models.generateContent({
+        model: aiModelMode === "fast" ? "gemini-2.5-flash" : "gemini-1.5-pro",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+          responseMimeType: "application/json",
+          responseSchema
+        }
+      });
+
+      const result = { text: response.text };
+      busCache.set(cacheKey, result);
+      res.json(result);
+    } catch (err: any) {
+      console.error("Gemini API Error:", err);
+      res.status(500).json({ error: err.message || "Failed to evaluate interview" });
+    }
+  });
+
   // API: Gemini 3.6 Flash Agent Insight Generation
   app.post("/api/gemini/agent-insight", async (req, res) => {
     try {
@@ -126,7 +204,10 @@ Give a clear, actionable 2-3 paragraph insight or bulleted blueprint answering t
           dailyStudyGoal: result.dailyStudyGoal,
           studyHistory: JSON.parse(result.studyHistory),
           quizHistory: JSON.parse(result.quizHistory),
-          dailyMinutesLog: JSON.parse(result.dailyMinutesLog)
+          dailyMinutesLog: JSON.parse(result.dailyMinutesLog),
+          honePathwayState: JSON.parse(result.honePathwayState),
+          trickSimulatorState: JSON.parse(result.trickSimulatorState),
+          vaultState: JSON.parse(result.vaultState)
         });
       } else {
         res.json(null);
@@ -140,7 +221,7 @@ Give a clear, actionable 2-3 paragraph insight or bulleted blueprint answering t
   // API: Save study progress
   app.post("/api/progress", requireAuth, async (req: any, res) => {
     try {
-      const { totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog } = req.body;
+      const { totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog, honePathwayState, trickSimulatorState, vaultState } = req.body;
       await db.insert(userProgress)
         .values({
           userId: req.dbUser.id,
@@ -150,6 +231,9 @@ Give a clear, actionable 2-3 paragraph insight or bulleted blueprint answering t
           studyHistory: JSON.stringify(studyHistory || {}),
           quizHistory: JSON.stringify(quizHistory || {}),
           dailyMinutesLog: JSON.stringify(dailyMinutesLog || {}),
+          honePathwayState: JSON.stringify(honePathwayState || {}),
+          trickSimulatorState: JSON.stringify(trickSimulatorState || {}),
+          vaultState: JSON.stringify(vaultState || {}),
           updatedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -161,6 +245,9 @@ Give a clear, actionable 2-3 paragraph insight or bulleted blueprint answering t
             studyHistory: JSON.stringify(studyHistory || {}),
             quizHistory: JSON.stringify(quizHistory || {}),
             dailyMinutesLog: JSON.stringify(dailyMinutesLog || {}),
+            honePathwayState: JSON.stringify(honePathwayState || {}),
+            trickSimulatorState: JSON.stringify(trickSimulatorState || {}),
+            vaultState: JSON.stringify(vaultState || {}),
             updatedAt: new Date(),
           }
         });

@@ -232,6 +232,9 @@ export interface CloudProgress {
   quizHistory: any;
   dailyMinutesLog?: { [dateKey: string]: number };
   algorandWalletAddress?: string;
+  honePathwayState?: any;
+  trickSimulatorState?: any;
+  vaultState?: any;
 }
 
 export const saveProgressToCloud = async (userId: string, progress: CloudProgress) => {

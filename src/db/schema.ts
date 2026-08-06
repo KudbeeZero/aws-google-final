@@ -21,6 +21,9 @@ export const userProgress = pgTable("user_progress", {
   studyHistory: text("study_history").default("{}").notNull(), // JSON string for flashcard states
   quizHistory: text("quiz_history").default("{}").notNull(),   // JSON string for quiz states
   dailyMinutesLog: text("daily_minutes_log").default("{}").notNull(), // JSON string for daily study minutes
+  honePathwayState: text("hone_pathway_state").default("{}").notNull(),
+  trickSimulatorState: text("trick_simulator_state").default("{}").notNull(),
+  vaultState: text("vault_state").default("{}").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

@@ -204,20 +204,12 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
   // Handle setting API key manually
   const handleSaveApiKey = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanKey = apiKeyInput.trim();
-    if (cleanKey) {
-      localStorage.setItem("aws_professor_api_key", cleanKey);
-      setApiKey(cleanKey);
-      setIsKeySetupOpen(false);
-      setApiError(null);
-    }
+    setIsKeySetupOpen(false);
+    setApiError(null);
   };
 
   const handleClearApiKey = () => {
-    localStorage.removeItem("aws_professor_api_key");
-    setApiKey("");
-    setApiKeyInput("");
-    setIsKeySetupOpen(true);
+    // No-op since we use server API
   };
 
   const handleResetChat = async () => {
@@ -247,11 +239,6 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
   const handleSendMessage = async (textToSend: string) => {
     if (!textToSend.trim() || isLoading) return;
 
-    if (!apiKey) {
-      setIsKeySetupOpen(true);
-      return;
-    }
-
     setApiError(null);
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -271,23 +258,32 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey });
-
       // Build stateless history structure matching the SDK Content type
       const contents = updatedHistory.map(msg => ({
-        role: msg.role === "user" ? "user" as const : "model" as const,
+        role: msg.role === "user" ? "user" : "model",
         parts: [{ text: msg.text }]
       }));
 
-      // Call Gemini model
-      const response = await ai.models.generateContent({
-        model: aiModelMode === "fast" ? "gemini-2.5-flash" : "gemini-1.5-pro",
-        contents,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          temperature: 0.7,
-        }
+      // Call Gemini model through our server proxy using BUSCACHE layer
+      const apiResponse = await fetch("/api/gemini/professor-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents,
+          aiModelMode,
+          systemInstruction: SYSTEM_INSTRUCTION
+        })
       });
+      
+      if (!apiResponse.ok) {
+        throw new Error("Failed to get response from Professor API");
+      }
+      
+      const response = await apiResponse.json();
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
 
       const responseText = response.text || "Professor Cloud is reflecting on that...";
       const parsed = parseProfessorMessage(responseText);
@@ -374,34 +370,14 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
 
         {/* Header Controls */}
         <div className="flex items-center gap-2">
-          {apiKey ? (
-            <>
-              <button
-                onClick={handleExportChat}
-                className="text-slate-400 hover:text-[#FF9900] text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
-                title="Export Chat History"
-              >
-                <Download className="w-3 h-3" />
-                Save Notes
-              </button>
-              <button
-                onClick={handleClearApiKey}
-                className="text-slate-400 hover:text-rose-400 text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
-                title="Change Gemini API Key"
-              >
-                <Key className="w-3 h-3" />
-                Reset Key
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setIsKeySetupOpen(true)}
-              className="text-amber-500 hover:text-amber-400 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20 cursor-pointer"
-            >
-              <Key className="w-3 h-3 animate-pulse" />
-              Setup API Key
-            </button>
-          )}
+          <button
+            onClick={handleExportChat}
+            className="text-slate-400 hover:text-[#FF9900] text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
+            title="Export Chat History"
+          >
+            <Download className="w-3 h-3" />
+            Save Notes
+          </button>
 
           <button
             onClick={handleResetChat}
@@ -450,8 +426,8 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
         </div>
       )}
 
-      {/* CONDITIONAL KEY SETUP DRAWER / MODAL PANEL */}
-      {(!apiKey || isKeySetupOpen) ? (
+      {/* CONDITIONAL KEY SETUP DRAWER / MODAL PANEL - Now unused because API key is loaded in backend */}
+      {(false) ? (
         <div className="flex-1 bg-slate-900 text-slate-100 p-6 flex flex-col justify-center items-center space-y-6 text-center animate-fade-in relative z-10">
           <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-full text-[#FF9900] animate-bounce">
             <Key className="w-8 h-8" />

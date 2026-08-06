@@ -8,6 +8,8 @@ interface TrickQuestionSimulatorProps {
   quizHistory: { [key: string]: boolean };
   onRecordResult: (id: string, isCorrect: boolean) => void;
   onResetQuiz: () => void;
+  savedState?: any;
+  onSaveState?: (state: any) => void;
 }
 
 export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
@@ -15,8 +17,16 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
   quizHistory,
   onRecordResult,
   onResetQuiz,
+  savedState,
+  onSaveState
 }) => {
-  const [currentIdx, setCurrentIdx] = useState(0);
+  const [currentIdx, setCurrentIdx] = useState(savedState?.currentIdx || 0);
+
+  useEffect(() => {
+    if (onSaveState) {
+      onSaveState({ currentIdx });
+    }
+  }, [currentIdx, onSaveState]);
   const [selectedKey, setSelectedKey] = useState<"A" | "B" | "C" | "D" | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [particles, setParticles] = useState<{ id: string; x: number; y: number }[]>([]);

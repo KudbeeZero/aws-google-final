@@ -33,6 +33,8 @@ interface HonePathwayViewProps {
   quizHistory: { [key: string]: boolean };
   readinessScore: number;
   onNavigateToTab: (tab: string) => void;
+  savedState?: any;
+  onSaveState?: (state: any) => void;
 }
 
 interface MilestoneLevel {
@@ -73,16 +75,21 @@ export const HonePathwayView: React.FC<HonePathwayViewProps> = ({
   quizHistory,
   readinessScore,
   onNavigateToTab,
+  savedState,
+  onSaveState,
 }) => {
   const [bypassLocks, setBypassLocks] = useState<boolean>(() => {
+    if (savedState?.bypassLocks !== undefined) return savedState.bypassLocks;
     return localStorage.getItem("hone_bypass_locks") === "true";
   });
   
   const [dailyGoal, setDailyGoal] = useState<number>(() => {
+    if (savedState?.dailyGoal !== undefined) return savedState.dailyGoal;
     return Number(localStorage.getItem("hone_daily_goal") || "5");
   });
 
   const [studyStreak, setStudyStreak] = useState<number>(() => {
+    if (savedState?.studyStreak !== undefined) return savedState.studyStreak;
     return Number(localStorage.getItem("hone_streak_days") || "3");
   });
 
@@ -91,22 +98,31 @@ export const HonePathwayView: React.FC<HonePathwayViewProps> = ({
   
   // Track votes in local state
   const [featureVotes, setFeatureVotes] = useState<{ [key: string]: number }>(() => {
+    if (savedState?.featureVotes !== undefined) return savedState.featureVotes;
     const saved = localStorage.getItem("hone_feature_votes_v1");
     return saved ? JSON.parse(saved) : {};
   });
 
   const [votedFeatures, setVotedFeatures] = useState<{ [key: string]: boolean }>(() => {
+    if (savedState?.votedFeatures !== undefined) return savedState.votedFeatures;
     const saved = localStorage.getItem("hone_voted_features_v1");
     return saved ? JSON.parse(saved) : {};
   });
 
   // Track checked calendar days for study streak
   const [streakDays, setStreakDays] = useState<{ [key: string]: boolean }>(() => {
+    if (savedState?.streakDays !== undefined) return savedState.streakDays;
     const saved = localStorage.getItem("hone_streak_days_checked");
     if (saved) return JSON.parse(saved);
     // Default: Monday, Tuesday, Wednesday checked
     return { "Mon": true, "Tue": true, "Wed": true, "Thu": false, "Fri": false, "Sat": false, "Sun": false };
   });
+
+  useEffect(() => {
+    if (onSaveState) {
+      onSaveState({ bypassLocks, dailyGoal, studyStreak, featureVotes, votedFeatures, streakDays });
+    }
+  }, [bypassLocks, dailyGoal, studyStreak, featureVotes, votedFeatures, streakDays, onSaveState]);
 
   useEffect(() => {
     localStorage.setItem("hone_bypass_locks", String(bypassLocks));

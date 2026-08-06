@@ -23,6 +23,8 @@ This file maintains project-specific development guidelines, personal user prefe
 
 ## 🎯 Active Tasks & Current Focus
 
-The first item on our roadmap is:
-*   **Task 1: Cloudflare & Web-Ready Sign-In Setup**
-    *   **Focus:** Assuring the sign-in and persistent user state works perfectly across staging URLs and prepared web host configurations, validating the user authentication lifecycle cleanly.
+The active items on our roadmap are:
+*   **Task 2: Multi-Module Progress Persistence (Completed)**
+    *   **Focus:** Ensured that user progression across HonePathwayView, TrickQuestionSimulator, and TheDistractorVault are correctly written to the PostgreSQL database, providing a robust synchronization layer.
+*   **Task 3: Offline-to-Cloud State Reconciliation (Next)**
+    *   **Focus:** Design an intelligent syncing mechanism that handles state reconciliation for users starting as guests (stored in `localStorage`) or offline, merging their study sessions and logs cleanly upon authentication/reconnection.

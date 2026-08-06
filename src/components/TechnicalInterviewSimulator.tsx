@@ -625,17 +625,8 @@ export const TechnicalInterviewSimulator: React.FC<TechnicalInterviewSimulatorPr
       return;
     }
 
-    const apiKey = localStorage.getItem("aws_professor_api_key");
-    if (!apiKey) {
-      alert("Please configure your Gemini API Key in the Interactive Professor tab to unlock AI-powered interview grading. Using fallback matching logic for now.");
-      fallbackEvaluateResponse();
-      return;
-    }
-
     setIsEvaluating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      
       const prompt = `You are an expert AWS technical interviewer: ${selectedInterviewer.name}, a ${selectedInterviewer.role}.
 Tone: ${selectedInterviewer.tone}
 Scenario: ${selectedScenario.question}
@@ -651,13 +642,14 @@ User Response:
 
 Evaluate the user's response. Provide deep Socratic architectural analysis. Grade them strictly out of 100 on AWS architecture correctness, security, best practices, and communication.
 `;
-
-      const response = await ai.models.generateContent({
-        model: aiModelMode === "fast" ? "gemini-2.5-flash" : "gemini-1.5-pro",
-        contents: prompt,
-        config: {
+      // Backend proxy API call using BUSCACHE
+      const apiResponse = await fetch("/api/gemini/evaluate-interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          aiModelMode,
           systemInstruction: "You are an elite, strict AWS solutions architect evaluating a candidate. Be extremely precise and provide deep Socratic architectural analysis rather than generic responses. Output strictly as JSON.",
-          responseMimeType: "application/json",
           responseSchema: {
             type: "object",
             properties: {
@@ -679,9 +671,14 @@ Evaluate the user's response. Provide deep Socratic architectural analysis. Grad
             },
             required: ["matchPercent", "grade", "foundKeywords", "missingKeywords", "interviewerFeedback", "rubricScores"]
           }
-        }
+        })
       });
 
+      if (!apiResponse.ok) {
+        throw new Error("Failed to reach Gemini API backend");
+      }
+
+      const response = await apiResponse.json();
       const text = response.text || "";
       const result = JSON.parse(text) as ScorecardResult;
       setScorecard(result);

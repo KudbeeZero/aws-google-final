@@ -197,6 +197,9 @@ export default function App() {
           const localToday = getLocalState("todayStudyMinutes", 0);
           const localTotal = getLocalState("totalStudyMinutes", 0);
           const localMinutesLog = getLocalState("dailyMinutesLog", {} as { [dateKey: string]: number });
+          const localHoneState = getLocalState("honePathwayState", {} as any);
+          const localTrickState = getLocalState("trickSimulatorState", {} as any);
+          const localVaultState = getLocalState("vaultState", {} as any);
 
           // Reconcile and merge guest memory with remote cloud data
           const mergedHistory = { ...(data?.studyHistory || {}) } as { [key: string]: "known" | "review" | null };
@@ -222,6 +225,10 @@ export default function App() {
             mergedMinutesLog[key] = Math.max(mergedMinutesLog[key] || 0, localMinutesLog[key] || 0);
           });
 
+          const mergedHoneState = { ...(data?.honePathwayState || {}), ...localHoneState };
+          const mergedTrickState = { ...(data?.trickSimulatorState || {}), ...localTrickState };
+          const mergedVaultState = { ...(data?.vaultState || {}), ...localVaultState };
+
           // Seed default logs if both cloud and guest history are completely empty
           if (!data && Object.keys(mergedMinutesLog).length === 0) {
             for (let i = 6; i > 0; i--) {
@@ -239,6 +246,9 @@ export default function App() {
           setTodayStudyMinutes(mergedToday);
           setTotalStudyMinutes(mergedTotal);
           setDailyMinutesLog(mergedMinutesLog);
+          setHoneState(mergedHoneState);
+          setTrickSimulatorState(mergedTrickState);
+          setVaultState(mergedVaultState);
 
           // Save the unified dataset to Postgres Cloud immediately
           await saveProgressToCloud(currentUser.uid, {
@@ -247,7 +257,10 @@ export default function App() {
             dailyStudyGoal: mergedGoal,
             studyHistory: mergedHistory,
             quizHistory: mergedQuiz,
-            dailyMinutesLog: mergedMinutesLog
+            dailyMinutesLog: mergedMinutesLog,
+            honePathwayState: mergedHoneState,
+            trickSimulatorState: mergedTrickState,
+            vaultState: mergedVaultState
           });
 
           // Clean up the guest keys to keep browser local storage tidy
@@ -257,6 +270,9 @@ export default function App() {
           localStorage.removeItem("aws_guest_todayStudyMinutes_v1");
           localStorage.removeItem("aws_guest_totalStudyMinutes_v1");
           localStorage.removeItem("aws_guest_dailyMinutesLog_v1");
+          localStorage.removeItem("aws_guest_honePathwayState_v1");
+          localStorage.removeItem("aws_guest_trickSimulatorState_v1");
+          localStorage.removeItem("aws_guest_vaultState_v1");
 
         } catch (error) {
           console.error("Postgres load & merge error:", error);
@@ -340,6 +356,9 @@ export default function App() {
   const [todayStudyMinutes, setTodayStudyMinutes] = useState<number>(() => getLocalState("todayStudyMinutes", 0));
   const [totalStudyMinutes, setTotalStudyMinutes] = useState<number>(() => getLocalState("totalStudyMinutes", 0));
   const [dailyMinutesLog, setDailyMinutesLog] = useState<{ [dateKey: string]: number }>(() => getLocalState("dailyMinutesLog", {}));
+  const [honeState, setHoneState] = useState<any>(() => getLocalState("honePathwayState", {}));
+  const [trickSimulatorState, setTrickSimulatorState] = useState<any>(() => getLocalState("trickSimulatorState", {}));
+  const [vaultState, setVaultState] = useState<any>(() => getLocalState("vaultState", {}));
   const [streak, setStreak] = useState<number>(0);
   
   // Flag to prevent overwriting cloud state with empty local state on first load
@@ -435,11 +454,14 @@ export default function App() {
         localStorage.setItem("aws_guest_todayStudyMinutes_v1", JSON.stringify(todayStudyMinutes));
         localStorage.setItem("aws_guest_totalStudyMinutes_v1", JSON.stringify(totalStudyMinutes));
         localStorage.setItem("aws_guest_dailyMinutesLog_v1", JSON.stringify(dailyMinutesLog));
+        localStorage.setItem("aws_guest_honePathwayState_v1", JSON.stringify(honeState));
+        localStorage.setItem("aws_guest_trickSimulatorState_v1", JSON.stringify(trickSimulatorState));
+        localStorage.setItem("aws_guest_vaultState_v1", JSON.stringify(vaultState));
       } catch (err) {
         console.error("Local storage save error:", err);
       }
     }
-  }, [user, hasLoadedCloudData, totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog]);
+  }, [user, hasLoadedCloudData, totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog, honeState, trickSimulatorState, vaultState]);
 
   // Auto-save changes to cloud when state changes (debounced)
   useEffect(() => {
@@ -452,13 +474,16 @@ export default function App() {
           dailyStudyGoal,
           studyHistory,
           quizHistory,
-          dailyMinutesLog
+          dailyMinutesLog,
+          honePathwayState: honeState,
+          trickSimulatorState,
+          vaultState
         });
         setSyncing(false);
       }, 1000); // Debounce to avoid overloading write rate
       return () => clearTimeout(delaySave);
     }
-  }, [user, hasLoadedCloudData, totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog]);
+  }, [user, hasLoadedCloudData, totalStudyMinutes, todayStudyMinutes, dailyStudyGoal, studyHistory, quizHistory, dailyMinutesLog, honeState, trickSimulatorState, vaultState]);
 
   // Sync streak to the Global Leaderboard in Firestore
   useEffect(() => {
@@ -551,7 +576,9 @@ export default function App() {
     <div className={`bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen w-full flex flex-col overflow-hidden font-sans ${darkMode ? "dark" : ""}`}>
       
       {/* Top Navigation / Header */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 bg-white dark:bg-slate-900 shrink-0 z-20">
+      <header 
+        className="border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 bg-white dark:bg-slate-900 shrink-0 z-20 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pb-4"
+      >
         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
           <button 
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1011,7 +1038,7 @@ export default function App() {
         </aside>
 
         {/* Core Workspace Main Stage */}
-        <main ref={mainRef} className="flex-1 p-4 sm:p-6 min-h-0 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 p-4 sm:p-6 md:pb-[max(1.5rem,env(safe-area-inset-bottom))] min-h-0 overflow-y-auto">
           
           {/* Welcome Notification Accent */}
           <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 rounded-sm flex items-start justify-between gap-4 shadow-sm mb-6 border border-slate-800">
@@ -1082,11 +1109,17 @@ export default function App() {
               quizHistory={quizHistory}
               onRecordResult={handleRecordQuizResult}
               onResetQuiz={handleResetQuiz}
+              savedState={trickSimulatorState}
+              onSaveState={setTrickSimulatorState}
             />
           )}
 
           {activeTab === "vault" && (
-            <TheDistractorVault vaultItems={distractorVault} />
+            <TheDistractorVault 
+              vaultItems={distractorVault}
+              savedState={vaultState}
+              onSaveState={setVaultState}
+            />
           )}
 
           {activeTab === "matching" && (
@@ -1123,10 +1156,12 @@ export default function App() {
       </div>
       
       {/* Mobile Bottom Navigation Dock (Top of the Footer) */}
-      <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 h-14 shrink-0 flex items-center justify-around px-1 z-20 shadow-lg">
+      <div 
+        className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex items-center justify-around px-1 z-20 shadow-lg pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      >
         <button 
           onClick={() => handleTabChange("dashboard")}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
             activeTab === "dashboard" 
               ? "text-[#FF9900]" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -1140,7 +1175,7 @@ export default function App() {
         
         <button 
           onClick={() => handleTabChange("professor")}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
             activeTab === "professor" 
               ? "text-[#FF9900]" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -1154,7 +1189,7 @@ export default function App() {
         
         <button 
           onClick={() => handleTabChange("flashcards")}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
             activeTab === "flashcards" 
               ? "text-amber-500" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -1168,7 +1203,7 @@ export default function App() {
 
         <button 
           onClick={() => handleTabChange("simulator")}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
             activeTab === "simulator" 
               ? "text-[#FF9900]" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -1182,7 +1217,7 @@ export default function App() {
 
         <button 
           onClick={() => handleTabChange("algorand")}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
             activeTab === "algorand" 
               ? "text-yellow-500" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -1196,7 +1231,7 @@ export default function App() {
 
         <button 
           onClick={() => setShowMobileMoreMenu(!showMobileMoreMenu)}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
             ["matching", "interview", "agents", "vault", "backup"].includes(activeTab) || showMobileMoreMenu
               ? "text-[#FF9900]" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -1213,8 +1248,8 @@ export default function App() {
 
       {/* Mobile Tools Sheet Overlay */}
       {showMobileMoreMenu && (
-        <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs md:hidden flex flex-col justify-end animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-xl p-5 space-y-4 max-h-[80vh] overflow-y-auto shadow-2xl">
+        <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs md:hidden flex flex-col justify-end animate-fade-in pt-[env(safe-area-inset-top)]">
+          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-xl p-5 space-y-4 max-h-[80vh] overflow-y-auto shadow-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 bg-[#FF9900] text-slate-950 rounded-xs flex items-center justify-center font-black text-xs">
@@ -1314,7 +1349,7 @@ export default function App() {
 
       {/* Modal 1: 10-Minute Rapid Onboarding Walkthrough */}
       {showQuickStartGuide && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm max-w-2xl w-full p-6 space-y-5 shadow-2xl relative animate-fade-in">
             <button
               onClick={() => setShowQuickStartGuide(false)}
@@ -1464,7 +1499,7 @@ export default function App() {
 
       {/* Modal 2: Deployment & Hosting Center */}
       {showDeployGuide && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm max-w-2xl w-full p-6 space-y-5 shadow-2xl relative animate-fade-in">
             <button
               onClick={() => setShowDeployGuide(false)}
