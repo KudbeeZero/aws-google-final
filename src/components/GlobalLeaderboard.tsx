@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { getLeaderboard, syncStreakToLeaderboard, LeaderboardEntry, auth } from "../lib/firebase";
+import { UserProfile } from "./UserProfile";
 import { Flame, Trophy, RefreshCw, Award, Crown, Search, ShieldCheck, Zap, Clock, Wallet, Info, X, ExternalLink, CheckCircle2, User } from "lucide-react";
 
 interface GlobalLeaderboardProps {
@@ -326,88 +327,13 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
         </button>
       </div>
 
-      {/* Candidate Detailed Info Drawer/Modal */}
+      {/* Candidate Detailed Profile Modal */}
       {selectedCandidate && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm p-6 max-w-md w-full shadow-2xl relative space-y-4 animate-fade-in">
-            <button 
-              onClick={() => setSelectedCandidate(null)}
-              className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-              {selectedCandidate.photoURL ? (
-                <img src={selectedCandidate.photoURL} alt="" className="w-12 h-12 rounded-full border-2 border-[#FF9900]" />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-[#FF9900]/20 border-2 border-[#FF9900] text-[#FF9900] font-black text-lg flex items-center justify-center uppercase">
-                  {selectedCandidate.displayName.charAt(0)}
-                </div>
-              )}
-              <div>
-                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-                  {selectedCandidate.displayName}
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                  {selectedCandidate.email || "Verified Candidate"}
-                </p>
-                <span className="text-[10px] font-bold text-[#FF9900] bg-[#FF9900]/10 px-2 py-0.5 rounded-xs uppercase tracking-wider mt-1 inline-block">
-                  AWS CLF-C02 Candidate
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-800">
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Study Streak</span>
-                <span className="text-sm font-black text-orange-500 flex items-center gap-1">
-                  <Flame className="w-4 h-4 fill-orange-400" />
-                  {selectedCandidate.streak} Days
-                </span>
-              </div>
-
-              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-800">
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Study Hours</span>
-                <span className="text-sm font-black text-blue-500 flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {Math.round(selectedCandidate.streak * 1.8 + 12)} Hours
-                </span>
-              </div>
-
-              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-800">
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Projected Score</span>
-                <span className="text-sm font-black text-[#FF9900] flex items-center gap-1">
-                  <Zap className="w-4 h-4" />
-                  {Math.min(1000, 720 + selectedCandidate.streak * 10)} / 1000
-                </span>
-              </div>
-
-              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-800">
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Algorand ASA</span>
-                <span className="text-xs font-black text-emerald-500 flex items-center gap-1">
-                  <Wallet className="w-3.5 h-3.5" />
-                  Verified ASA
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-800 space-y-1">
-              <span className="text-[10px] text-slate-400 font-bold uppercase font-mono block">Cloud Sync Status</span>
-              <p className="text-[11px] text-slate-700 dark:text-slate-300 font-sans">
-                Last synced to Firebase Firestore on {new Date(selectedCandidate.updatedAt || Date.now()).toLocaleDateString()} at {new Date(selectedCandidate.updatedAt || Date.now()).toLocaleTimeString()}
-              </p>
-            </div>
-
-            <button 
-              onClick={() => setSelectedCandidate(null)}
-              className="w-full py-2 bg-[#FF9900] hover:bg-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded cursor-pointer"
-            >
-              Close Profile
-            </button>
-          </div>
-        </div>
+        <UserProfile 
+          user={selectedCandidate} 
+          onClose={() => setSelectedCandidate(null)} 
+          isSelf={selectedCandidate.userId === currentUserId || selectedCandidate.userId === auth.currentUser?.uid}
+        />
       )}
 
       {/* Leaderboard Rules & Scoring Information Modal */}

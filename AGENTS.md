@@ -40,5 +40,9 @@ The active items on our roadmap are:
     *   **Focus:** Enhanced `index.html` with viewport-fit=cover and status bar styling. Added iPhone safe area inset padding (`safe-top`, `safe-bottom`), smooth momentum touch scrolling (`touch-scroll`), tap highlight removal, and 44px minimum touch targets in `src/index.css` for a native app feel on mobile devices.
 *   **Task 9: Mobile Bottom Navigation & iOS Scroll Locking Refinement (Completed)**
     *   **Focus:** Refined the mobile bottom navigation bar active state logic (`activeTab`) to correctly reflect sub-page selections like 'matching' or 'vault' under the Tools menu, and added automatic iOS body scroll locking (`overflow: hidden`) when `showMobileMoreMenu` is open.
+*   **Task 10: Interactive UserProfile Component & Leaderboard Integration (Completed)**
+    *   **Focus:** Created the dedicated `UserProfile` component (`src/components/UserProfile.tsx`) displaying candidate avatars, join dates, total study minutes, projected exam scores, and historical streak accomplishments. Integrated it directly into the global leaderboard so clicking any candidate instantly opens their professional profile.
+*   **Task 11: UserProfile Milestone Badges & Audio Cache Service (Completed)**
+    *   **Focus:** Enhanced `UserProfile.tsx` with dynamic visual milestone badges ('7-Day Streak Master', '100 Minutes Club', '30-Day Elite', and 'Algorand ASA Verified') with unlock status indicators. Also created `src/services/audioCacheService.ts` to support offline audio caching and text-to-speech fallback narration.
 
 
