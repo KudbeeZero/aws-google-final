@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "motion/react";
+import { ProactiveGapFiller } from "./ProactiveGapFiller";
 import { 
   Bot, 
   Cpu, 
@@ -380,7 +381,7 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
   });
 
   // Copilot Studio Workflow Canvas States
-  const [hubViewMode, setHubViewMode] = useState<"knowledge" | "copilot-workflows">("knowledge");
+  const [hubViewMode, setHubViewMode] = useState<"knowledge" | "copilot-workflows" | "gap-filler">("knowledge");
   const [workflows, setWorkflows] = useState<AutonomousWorkflow[]>(DEFAULT_WORKFLOWS);
   const [selectedWorkflow, setSelectedWorkflow] = useState<AutonomousWorkflow>(DEFAULT_WORKFLOWS[0]);
   const [activeRunningNodeId, setActiveRunningNodeId] = useState<string | null>(null);
@@ -1008,10 +1009,22 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
               NEW
             </span>
           </button>
+
+          <button
+            onClick={() => setHubViewMode("gap-filler")}
+            className={`px-4 py-2 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center gap-2 relative ${
+              hubViewMode === "gap-filler"
+                ? "bg-indigo-600 text-white shadow-md"
+                : "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
+            }`}
+          >
+            <Zap className="w-4 h-4" />
+            Proactive Gap Filler
+          </button>
         </div>
 
         <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
-          {hubViewMode === "copilot-workflows" ? "Copilot Studio Harness Active" : "5 Domain Experts Online"}
+          {hubViewMode === "copilot-workflows" ? "Copilot Studio Harness Active" : hubViewMode === "gap-filler" ? "Continuous Gap Analysis Active" : "5 Domain Experts Online"}
         </span>
       </div>
       {showRoadmap && (
@@ -1086,6 +1099,7 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
 
       {/* Swarm Diagnostics Execution Log Pane */}
       {/* Swarm Console Telemetry */}
+      {hubViewMode !== "gap-filler" && (
       <div className="bg-slate-950 border border-slate-800 p-4 rounded-sm font-mono text-xs space-y-2 shadow-inner">
         <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-2">
           <span className="text-[10px] font-bold uppercase text-[#FF9900] flex items-center gap-1.5">
@@ -1108,6 +1122,11 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
           )}
         </div>
       </div>
+      )}
+
+      {hubViewMode === "gap-filler" && (
+        <ProactiveGapFiller />
+      )}
 
       {/* Main Grid: Agent Selector on Left, Dispatcher & Notes on Right */}
       {hubViewMode === "knowledge" && (

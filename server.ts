@@ -13,6 +13,16 @@ import { eq, desc } from "drizzle-orm";
 
 dotenv.config();
 
+// Global Process Error Handlers to prevent server crashes
+process.on('uncaughtException', (err) => {
+  console.error('[CRITICAL] Uncaught Exception:', err);
+  // In a robust production environment, you might want to gracefully shut down here
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 let genAIClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {
   if (!genAIClient) {
@@ -582,6 +592,22 @@ Give a clear, actionable 2-3 paragraph insight or bulleted blueprint answering t
       console.error("Failed to save chat history:", err);
       res.status(500).json({ error: "Database error" });
     }
+  });
+
+  // Global API Error Handler Middleware
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`[Express Error] ${req.method} ${req.path}:`, err);
+    
+    // Don't leak stack traces in production, but provide useful feedback
+    const statusCode = err.status || err.statusCode || 500;
+    const message = statusCode === 500 && process.env.NODE_ENV === 'production' 
+      ? 'An unexpected internal server error occurred.' 
+      : err.message || 'Unknown error';
+
+    res.status(statusCode).json({
+      error: message,
+      success: false
+    });
   });
 
   // Serve Frontend

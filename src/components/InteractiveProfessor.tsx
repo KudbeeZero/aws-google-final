@@ -124,9 +124,31 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => {
     return localStorage.getItem("aws_professor_voice_id") || "pNInz6obpgDQGcFmaJgB";
   });
+  const [speechRate, setSpeechRate] = useState<number>(() => {
+    return Number(localStorage.getItem("aws_professor_speech_rate") || "1.0");
+  });
+  const [speechVolume, setSpeechVolume] = useState<number>(() => {
+    return Number(localStorage.getItem("aws_professor_speech_volume") || "1.0");
+  });
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [loadingMessageId, setLoadingMessageId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const updateAudioVolume = (vol: number) => {
+    setSpeechVolume(vol);
+    localStorage.setItem("aws_professor_speech_volume", String(vol));
+    if (audioRef.current) {
+      audioRef.current.volume = vol;
+    }
+  };
+
+  const updateAudioRate = (rate: number) => {
+    setSpeechRate(rate);
+    localStorage.setItem("aws_professor_speech_rate", String(rate));
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+    }
+  };
 
   // Audio lifecycle cleanup on unmount
   useEffect(() => {
@@ -174,6 +196,8 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
       const audioUrl = URL.createObjectURL(audioBlob);
       
       const audio = new Audio(audioUrl);
+      audio.volume = speechVolume;
+      audio.playbackRate = speechRate;
       audioRef.current = audio;
       
       audio.onplay = () => {
@@ -487,26 +511,59 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
 
         {/* Header Controls */}
         <div className="flex items-center gap-3">
-          {/* ElevenLabs Voice Selection Dropdown */}
-          <div className="hidden sm:flex items-center gap-1.5 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300 shadow-inner">
-            <Volume2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <select
-              id="professor-voice-select"
-              value={selectedVoiceId}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedVoiceId(val);
-                localStorage.setItem("aws_professor_voice_id", val);
-              }}
-              className="bg-transparent border-none text-[10px] font-bold font-mono focus:outline-none text-slate-200 cursor-pointer pr-1"
-              title="Change Professor voice synthesis tone"
-            >
-              {ELEVENLABS_VOICES.map((v) => (
-                <option key={v.id} value={v.id} className="bg-slate-900 text-slate-100 font-sans font-semibold">
-                  Voice: {v.name}
-                </option>
-              ))}
-            </select>
+          {/* ElevenLabs Voice Selection & Audio Preferences Suite */}
+          <div className="hidden sm:flex items-center gap-2.5">
+            <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300 shadow-inner">
+              <Volume2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <select
+                id="professor-voice-select"
+                value={selectedVoiceId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedVoiceId(val);
+                  localStorage.setItem("aws_professor_voice_id", val);
+                }}
+                className="bg-transparent border-none text-[10px] font-bold font-mono focus:outline-none text-slate-200 cursor-pointer pr-1"
+                title="Change Professor voice synthesis tone"
+              >
+                {ELEVENLABS_VOICES.map((v) => (
+                  <option key={v.id} value={v.id} className="bg-slate-900 text-slate-100 font-sans font-semibold">
+                    Voice: {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Speech Rate Controls */}
+            <div className="hidden md:flex items-center gap-1 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300 shadow-inner">
+              <span className="font-mono font-bold text-[9px] text-[#FF9900] tracking-tight">SPEED:</span>
+              <select
+                value={speechRate}
+                onChange={(e) => updateAudioRate(parseFloat(e.target.value))}
+                className="bg-transparent border-none text-[10px] font-extrabold font-mono focus:outline-none text-slate-200 cursor-pointer"
+                title="Adjust Narrator Playback Speed"
+              >
+                <option value="0.8" className="bg-slate-900">0.8x</option>
+                <option value="1.0" className="bg-slate-900">1.0x (Normal)</option>
+                <option value="1.2" className="bg-slate-900">1.2x (Fast)</option>
+                <option value="1.5" className="bg-slate-900">1.5x (Sprint)</option>
+              </select>
+            </div>
+
+            {/* Speech Volume slider */}
+            <div className="hidden lg:flex items-center gap-1.5 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300 shadow-inner">
+              <span className="font-mono font-bold text-[9px] text-[#FF9900] tracking-tight">VOL:</span>
+              <input 
+                type="range"
+                min="0.1"
+                max="1.0"
+                step="0.1"
+                value={speechVolume}
+                onChange={(e) => updateAudioVolume(parseFloat(e.target.value))}
+                className="w-12 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#FF9900]"
+                title={`TTS Volume: ${Math.round(speechVolume * 100)}%`}
+              />
+            </div>
           </div>
 
           <button
