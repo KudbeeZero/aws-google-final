@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Flashcard, DomainData } from "../types";
 import { ParticleEffect } from "./ParticleEffect";
+import { InteractiveKnowledgeCheck } from "./InteractiveKnowledgeCheck";
 
 interface FlashcardDeckProps {
   flashcards: Flashcard[];
@@ -50,6 +51,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [viewMode, setViewMode] = useState<"deck" | "grid" | "code">("deck");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showKnowledgeCheck, setShowKnowledgeCheck] = useState(false);
   const [expandedGridCards, setExpandedGridCards] = useState<{ [key: string]: boolean }>({});
   const [particles, setParticles] = useState<{ id: string; x: number; y: number }[]>([]);
 
@@ -156,7 +158,13 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
     if (filteredCards.length === 0) return;
     setIsFlipped(false);
     setTimeout(() => {
-      setCurrentIdx((prev) => (prev < filteredCards.length - 1 ? prev + 1 : 0));
+      setCurrentIdx((prev) => {
+        const next = prev < filteredCards.length - 1 ? prev + 1 : 0;
+        if (next > 0 && next % 10 === 0) {
+          setShowKnowledgeCheck(true);
+        }
+        return next;
+      });
     }, 120);
   }, [filteredCards]);
 
@@ -296,6 +304,13 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
           </div>
 
           <div className="flex items-center gap-2 self-start md:self-auto">
+            <button
+              onClick={() => setShowKnowledgeCheck(true)}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-sm shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Award className="w-3.5 h-3.5" /> Knowledge Check
+            </button>
+
             <button
               onClick={() => setShowCreateModal(true)}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-sm shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
@@ -859,8 +874,8 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
 
       {/* CREATE CUSTOM FLASHCARD MODAL */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white border border-slate-200 w-full max-w-lg p-6 rounded-sm shadow-xl space-y-4">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white/90 backdrop-blur-xl border border-white/20 w-full max-w-lg p-6 rounded-sm shadow-2xl space-y-4 ring-1 ring-slate-900/5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Plus className="w-5 h-5 text-blue-600" />
@@ -938,6 +953,16 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* INTERACTIVE KNOWLEDGE CHECK MODAL */}
+      {showKnowledgeCheck && (
+        <InteractiveKnowledgeCheck
+          onClose={() => setShowKnowledgeCheck(false)}
+          onComplete={(score) => {
+            console.log("Knowledge check completed with score:", score);
+          }}
+        />
       )}
 
     </div>

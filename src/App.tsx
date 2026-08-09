@@ -125,6 +125,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
   const [isIframe, setIsIframe] = useState<boolean>(false);
 
@@ -291,6 +292,7 @@ export default function App() {
           const interviewSessions = await getInterviewSessionsFromCloud();
           setInterviewHistory(interviewSessions);
           
+          setLastSyncTime(new Date());
         } catch (error) {
           console.error("Postgres load & merge error:", error);
         } finally {
@@ -497,6 +499,7 @@ export default function App() {
           trickSimulatorState,
           vaultState
         });
+        setLastSyncTime(new Date());
         setSyncing(false);
       }, 1000); // Debounce to avoid overloading write rate
       return () => clearTimeout(delaySave);
@@ -515,6 +518,29 @@ export default function App() {
       );
     }
   }, [user, hasLoadedCloudData, streak]);
+
+  const handleForceSync = async () => {
+    if (!user || syncing || isOffline) return;
+    setSyncing(true);
+    try {
+      await saveProgressToCloud(user.uid, {
+        totalStudyMinutes,
+        todayStudyMinutes,
+        dailyStudyGoal,
+        studyHistory,
+        quizHistory,
+        dailyMinutesLog,
+        honePathwayState: honeState,
+        trickSimulatorState,
+        vaultState
+      });
+      setLastSyncTime(new Date());
+    } catch (err) {
+      console.error("Force sync failed:", err);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Handle daily study goal metrics
   const handleUpdateDailyGoal = (mins: number) => {
@@ -692,17 +718,41 @@ export default function App() {
           ) : user ? (
             <div className="flex items-center gap-1.5 shrink-0">
               {/* Cloud Sync Status Indicator */}
-              <span 
-                className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 relative cursor-pointer"
-                title={syncing ? "Syncing study progress to AWS Study Cloud..." : isOffline ? "Offline mode active" : "Study progress safe in Firebase Cloud"}
-              >
-                {isOffline ? (
-                  <CloudLightning className="w-4 h-4 text-red-500" />
-                ) : (
-                  <CloudLightning className={`w-4 h-4 ${syncing ? 'text-[#FF9900] animate-bounce' : 'text-emerald-500'}`} />
-                )}
-                {!isOffline && <span className={`absolute top-0 right-0 w-1.5 h-1.5 rounded-full ${syncing ? 'bg-[#FF9900]' : 'bg-emerald-500'}`} />}
-              </span>
+              <div className="flex items-center gap-2 mr-1">
+                <div className="hidden sm:flex flex-col items-end">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    {syncing ? 'Syncing to Cloud...' : isOffline ? 'Offline Mode' : 'Cloud Synchronized'}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                    {lastSyncTime ? `Last saved: ${lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Waiting for sync...'}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  {!isOffline && (
+                    <button
+                      onClick={handleForceSync}
+                      disabled={syncing}
+                      title="Force immediate cloud sync"
+                      className="hidden sm:flex items-center justify-center p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin text-[#FF9900]' : ''}`} />
+                    </button>
+                  )}
+                  
+                  <span 
+                    className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 relative cursor-pointer shrink-0"
+                    title={syncing ? "Syncing study progress to AWS Study Cloud..." : isOffline ? "Offline mode active" : `Last synced to cloud at ${lastSyncTime?.toLocaleTimeString() || '...'}`}
+                  >
+                    {isOffline ? (
+                      <CloudLightning className="w-4 h-4 text-red-500" />
+                    ) : (
+                      <CloudLightning className={`w-4 h-4 ${syncing ? 'text-[#FF9900] animate-bounce' : 'text-emerald-500'}`} />
+                    )}
+                    {!isOffline && <span className={`absolute top-0 right-0 w-1.5 h-1.5 rounded-full ${syncing ? 'bg-[#FF9900]' : 'bg-emerald-500'}`} />}
+                  </span>
+                </div>
+              </div>
               
               {/* User profile bubble */}
               <div 
@@ -1267,8 +1317,8 @@ export default function App() {
 
       {/* Mobile Tools Sheet Overlay */}
       {showMobileMoreMenu && (
-        <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs md:hidden flex flex-col justify-end animate-fade-in pt-[env(safe-area-inset-top)]">
-          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-xl p-5 space-y-4 max-h-[80vh] overflow-y-auto shadow-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <div className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-md md:hidden flex flex-col justify-end animate-fade-in pt-[env(safe-area-inset-top)]">
+          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-200/50 dark:border-slate-700/50 rounded-t-xl p-5 space-y-4 max-h-[80vh] overflow-y-auto shadow-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))] ring-1 ring-white/10">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 bg-[#FF9900] text-slate-950 rounded-xs flex items-center justify-center font-black text-xs">

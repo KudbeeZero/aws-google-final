@@ -17,8 +17,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onClose, isSelf 
     : "Recently Joined";
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg max-w-lg w-full shadow-2xl overflow-hidden relative flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 rounded-lg max-w-lg w-full shadow-2xl overflow-hidden relative flex flex-col max-h-[90vh] ring-1 ring-slate-900/5 dark:ring-white/10">
         
         {/* Terminal Header Bar */}
         <div className="bg-slate-900 text-slate-200 px-4 py-3 flex items-center justify-between border-b border-slate-800">

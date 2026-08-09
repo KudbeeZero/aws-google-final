@@ -44,5 +44,15 @@ The active items on our roadmap are:
     *   **Focus:** Created the dedicated `UserProfile` component (`src/components/UserProfile.tsx`) displaying candidate avatars, join dates, total study minutes, projected exam scores, and historical streak accomplishments. Integrated it directly into the global leaderboard so clicking any candidate instantly opens their professional profile.
 *   **Task 11: UserProfile Milestone Badges & Audio Cache Service (Completed)**
     *   **Focus:** Enhanced `UserProfile.tsx` with dynamic visual milestone badges ('7-Day Streak Master', '100 Minutes Club', '30-Day Elite', and 'Algorand ASA Verified') with unlock status indicators. Also created `src/services/audioCacheService.ts` to support offline audio caching and text-to-speech fallback narration.
+*   **Task 12: Interactive Elements Haptic & Active State Animation (Completed)**
+    *   **Focus:** Updated `src/index.css` to add a subtle `scale: 0.97` active animation to buttons and anchors globally, creating native-feeling haptic feedback and improving tactile interaction primarily for iOS and mobile devices.
+*   **Task 13: Agent Swarm Autonomous Evaluation Upgrade (Completed)**
+    *   **Focus:** Upgraded the Agent Swarm Hub to use real Gemini API (`/api/gemini/agent-insight`) for Copilot Studio Autonomous Workflows, Cheat Sheet Distillation, and the Swarm Diagnostic Pulse check, replacing previously hardcoded local artifacts.
+*   **Task 14: Cloud Sync Status Indicator Enhancement (Completed)**
+    *   **Focus:** Upgraded the header's Cloud Sync Status Indicator in `src/App.tsx` to prominently display the last successful cloud synchronization timestamp (`Last saved: 10:42:05 AM`) alongside the syncing animation, ensuring users have precise confidence in their data persistence.
+*   **Task 15: Manual Force Sync Trigger (Completed)**
+    *   **Focus:** Added a manual 'Force Sync' button next to the cloud status indicator in `src/App.tsx` allowing users to instantly push their local state to the Cloud SQL backend database via `saveProgressToCloud`.
+*   **Task 16: Agent Swarm UX & Tooltips Enhancement (Completed)**
+    *   **Focus:** Enhanced the Agent Swarm Hub by introducing a dedicated "How It Works" guided onboarding section, updating empty states for knowledge exchange feeds and autonomous telemetry consoles, and clarifying interaction contexts for Copilot Studio.
 
 

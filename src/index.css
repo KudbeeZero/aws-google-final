@@ -156,4 +156,12 @@ html, body {
   }
 }
 
+/* Active State Animations for Haptic-like Feedback */
+button:active, 
+a:active, 
+[role="button"]:active {
+  scale: 0.97;
+  transition: scale 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 

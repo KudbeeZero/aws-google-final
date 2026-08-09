@@ -338,8 +338,8 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
 
       {/* Leaderboard Rules & Scoring Information Modal */}
       {showInfoModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm p-6 max-w-lg w-full shadow-2xl relative space-y-4 animate-fade-in">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 rounded-sm p-6 max-w-lg w-full shadow-2xl relative space-y-4 animate-fade-in ring-1 ring-slate-900/5 dark:ring-white/10">
             <button 
               onClick={() => setShowInfoModal(false)}
               className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"

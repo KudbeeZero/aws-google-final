@@ -808,8 +808,8 @@ export const HonePathwayView: React.FC<HonePathwayViewProps> = ({
 
       {/* Blueprint Detail Modal (Architectural Simulation) */}
       {selectedFeature && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-sm shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in">
+          <div className="bg-white/90 backdrop-blur-xl border border-white/20 rounded-sm shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto flex flex-col justify-between ring-1 ring-slate-900/5">
             
             {/* Modal Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
