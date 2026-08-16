@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "motion/react";
 import { ProactiveGapFiller } from "./ProactiveGapFiller";
+import { AgentAnalytics } from "./AgentAnalytics";
 import { 
   Bot, 
   Cpu, 
@@ -381,7 +382,7 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
   });
 
   // Copilot Studio Workflow Canvas States
-  const [hubViewMode, setHubViewMode] = useState<"knowledge" | "copilot-workflows" | "gap-filler">("knowledge");
+  const [hubViewMode, setHubViewMode] = useState<"knowledge" | "copilot-workflows" | "gap-filler" | "analytics">("knowledge");
   const [workflows, setWorkflows] = useState<AutonomousWorkflow[]>(DEFAULT_WORKFLOWS);
   const [selectedWorkflow, setSelectedWorkflow] = useState<AutonomousWorkflow>(DEFAULT_WORKFLOWS[0]);
   const [activeRunningNodeId, setActiveRunningNodeId] = useState<string | null>(null);
@@ -882,10 +883,10 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
           <button
             onClick={() => setShowHowItWorks(!showHowItWorks)}
-            className={`px-3 py-2.5 font-bold text-xs rounded-sm border flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-none px-3.5 py-2.5 font-bold text-xs rounded-sm border flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px] ${
               showHowItWorks 
                 ? "bg-sky-900/50 text-sky-400 border-sky-800" 
                 : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
@@ -897,7 +898,7 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
           
           <button
             onClick={() => setShowRoadmap(!showRoadmap)}
-            className={`px-3 py-2.5 font-bold text-xs rounded-sm border flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-none px-3.5 py-2.5 font-bold text-xs rounded-sm border flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px] ${
               showRoadmap
                 ? "bg-slate-700 text-white border-slate-600"
                 : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
@@ -911,7 +912,7 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
           <button
             onClick={handleRunSwarmDiagnostics}
             disabled={isSwarmRunning}
-            className="px-5 py-2.5 bg-[#FF9900] hover:bg-amber-600 text-slate-950 font-black text-xs rounded-sm shadow-md flex items-center gap-2 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+            className="w-full sm:w-auto px-5 py-2.5 bg-[#FF9900] hover:bg-amber-600 text-slate-950 font-black text-xs rounded-sm shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 min-h-[44px]"
           >
             {isSwarmRunning ? (
               <>
@@ -981,38 +982,38 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
       )}
 
       {/* View Mode Mode Switcher Bar */}
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 gap-3">
+        <div className="grid grid-cols-1 sm:flex items-center gap-2 flex-wrap w-full">
           <button
             onClick={() => setHubViewMode("knowledge")}
-            className={`px-4 py-2 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center justify-center gap-2 min-h-[44px] ${
               hubViewMode === "knowledge"
                 ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
                 : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
             }`}
           >
             <Bot className="w-4 h-4 text-[#FF9900]" />
-            Agent Roster & Knowledge Exchange
+            Agent Roster & Knowledge
           </button>
 
           <button
             onClick={() => setHubViewMode("copilot-workflows")}
-            className={`px-4 py-2 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center gap-2 relative ${
+            className={`px-4 py-2.5 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center justify-center gap-2 relative min-h-[44px] ${
               hubViewMode === "copilot-workflows"
                 ? "bg-purple-600 text-white shadow-md"
                 : "bg-purple-950/20 text-purple-400 border border-purple-800/60 hover:bg-purple-900/40"
             }`}
           >
             <Workflow className="w-4 h-4" />
-            Copilot Studio Autonomous Workflows
-            <span className="text-[9px] bg-purple-400/20 text-purple-300 font-mono px-1.5 py-0.2 rounded-xs border border-purple-400/30">
+            Copilot Studio Workflows
+            <span className="text-[9px] bg-purple-400/20 text-purple-300 font-mono px-1.5 py-0.5 rounded-xs border border-purple-400/30">
               NEW
             </span>
           </button>
 
           <button
             onClick={() => setHubViewMode("gap-filler")}
-            className={`px-4 py-2 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center gap-2 relative ${
+            className={`px-4 py-2.5 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center justify-center gap-2 relative min-h-[44px] ${
               hubViewMode === "gap-filler"
                 ? "bg-indigo-600 text-white shadow-md"
                 : "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
@@ -1021,10 +1022,22 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
             <Zap className="w-4 h-4" />
             Proactive Gap Filler
           </button>
+
+          <button
+            onClick={() => setHubViewMode("analytics")}
+            className={`px-4 py-2.5 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center justify-center gap-2 relative min-h-[44px] ${
+              hubViewMode === "analytics"
+                ? "bg-blue-600 text-white shadow-md"
+                : "bg-blue-950/20 text-blue-400 border border-blue-800/60 hover:bg-blue-900/40"
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            Agent Analytics
+          </button>
         </div>
 
-        <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
-          {hubViewMode === "copilot-workflows" ? "Copilot Studio Harness Active" : hubViewMode === "gap-filler" ? "Continuous Gap Analysis Active" : "5 Domain Experts Online"}
+        <span className="text-[10px] text-slate-400 font-mono hidden lg:inline whitespace-nowrap">
+          {hubViewMode === "copilot-workflows" ? "Copilot Studio Harness Active" : hubViewMode === "gap-filler" ? "Continuous Gap Analysis Active" : hubViewMode === "analytics" ? "SLA Telemetry Live" : "5 Domain Experts Online"}
         </span>
       </div>
       {showRoadmap && (
@@ -1099,7 +1112,7 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
 
       {/* Swarm Diagnostics Execution Log Pane */}
       {/* Swarm Console Telemetry */}
-      {hubViewMode !== "gap-filler" && (
+      {hubViewMode !== "gap-filler" && hubViewMode !== "analytics" && (
       <div className="bg-slate-950 border border-slate-800 p-4 rounded-sm font-mono text-xs space-y-2 shadow-inner">
         <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-2">
           <span className="text-[10px] font-bold uppercase text-[#FF9900] flex items-center gap-1.5">
@@ -1126,6 +1139,10 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
 
       {hubViewMode === "gap-filler" && (
         <ProactiveGapFiller />
+      )}
+
+      {hubViewMode === "analytics" && (
+        <AgentAnalytics />
       )}
 
       {/* Main Grid: Agent Selector on Left, Dispatcher & Notes on Right */}

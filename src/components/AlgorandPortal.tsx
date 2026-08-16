@@ -18,7 +18,11 @@ import {
   TrendingUp,
   Clock,
   Shield,
-  QrCode
+  QrCode,
+  Terminal,
+  Code,
+  Play,
+  Send
 } from "lucide-react";
 
 const peraWallet = new PeraWalletConnect({ shouldShowSignTxnToast: false });
@@ -42,7 +46,53 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string>("");
   const [manualAddress, setManualAddress] = useState("");
-  const [activeTab, setActiveTab] = useState<"explorer" | "wallet">("explorer");
+  const [activeTab, setActiveTab] = useState<"explorer" | "wallet" | "cli">("explorer");
+
+  // Algorand CLI & Smart Contract Sandbox states
+  const [cliInput, setCliInput] = useState("");
+  const [cliLogs, setCliLogs] = useState<Array<{ cmd: string; output: string; time: string; type?: string }>>([
+    { cmd: "algokit --version", output: "AlgoKit v2.3.0 (Python & TypeScript smart contract development toolkit)", time: "00:00:01", type: "info" },
+    { cmd: "algosdk status", output: "Connected to Algonode TestNet Node. Last round: active. Ping: 28ms.", time: "00:00:02", type: "success" }
+  ]);
+  const [selectedTemplate, setSelectedTemplate] = useState<"counter" | "escrow" | "asa">("counter");
+  const [deployStatus, setDeployStatus] = useState<string | null>(null);
+
+  const runCliCommand = (commandToRun?: string) => {
+    const cmd = commandToRun || cliInput;
+    if (!cmd.trim()) return;
+    const timeStr = new Date().toLocaleTimeString();
+    let output = "";
+    let type = "success";
+
+    const lower = cmd.toLowerCase().trim();
+    if (lower.includes("algokit init") || lower.includes("new")) {
+      output = "✨ Initialized new AlgoKit TypeScript smart contract project structure successfully in /projects/aws-exam-contract.";
+    } else if (lower.includes("goal node") || lower.includes("status")) {
+      output = `📊 Algorand Node Status: Sync round #${blockHeight || 4829104}. Consensus protocol v12. Ledger health: OK.`;
+    } else if (lower.includes("tealscript") || lower.includes("compile")) {
+      output = `⚙️ TEALScript compiled successfully!\nApproval Program (TEAL v10): 0x2001012203120... (Size: 148 bytes)\nClear State Program: 0x20010101 (Size: 4 bytes)`;
+    } else if (lower.includes("algosdk") || lower.includes("ping")) {
+      output = `⚡ Algosdk RPC ping test successful! Algonode TestNet latency: 24ms. Block round: ${blockHeight || 4829104}.`;
+    } else if (lower.includes("help")) {
+      output = "💡 Available AlgoKit & CLI Commands:\n- 'algokit init' : Initialize smart contract project\n- 'goal node status' : Inspect node ledger sync\n- 'tealscript compile' : Compile TypeScript contract to TEAL\n- 'algosdk ping' : Test JSON-RPC connection\n- 'clear' : Clear console output";
+    } else if (lower.includes("clear")) {
+      setCliLogs([]);
+      setCliInput("");
+      return;
+    } else {
+      output = `Executed '${cmd}' on Algorand TestNet Sandbox successfully. Response code 200 OK.`;
+    }
+
+    setCliLogs((prev) => [...prev, { cmd, output, time: timeStr, type }]);
+    if (!commandToRun) setCliInput("");
+  };
+
+  const simulateContractDeploy = () => {
+    setDeployStatus("Compiling & deploying contract to Algorand TestNet...");
+    setTimeout(() => {
+      setDeployStatus(`✅ Success! Smart Contract (${selectedTemplate.toUpperCase()}) deployed to TestNet. App ID: #${Math.floor(Math.random() * 899999 + 100000)}`);
+    }, 1500);
+  };
 
   // Blockchain Explorer states
   const [blockHeight, setBlockHeight] = useState<number>(0);
@@ -352,6 +402,17 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
             }`}
           >
             Your Pera Wallet Console
+          </button>
+          <button
+            onClick={() => setActiveTab("cli")}
+            className={`px-4 py-3 sm:py-2.5 text-xs font-bold tracking-tight border-l-2 sm:border-l-0 sm:border-b-2 transition-all text-left sm:text-center flex items-center gap-1.5 ${
+              activeTab === "cli"
+                ? "border-yellow-500 bg-yellow-500/5 sm:bg-transparent text-slate-900 dark:text-white"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5 text-yellow-500" />
+            AlgoKit CLI & Smart Contract Sandbox
           </button>
         </div>
 
@@ -682,6 +743,138 @@ export const AlgorandPortal: React.FC<AlgorandPortalProps> = ({
 
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "cli" && (
+          <div className="lg:col-span-12 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Interactive Terminal CLI */}
+            <div className="lg:col-span-7 bg-slate-950 border border-slate-800 rounded-sm p-5 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-yellow-500" />
+                  <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider">AlgoKit & TestNet Terminal</h3>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] text-slate-400 font-mono">CLI Sandbox Active</span>
+                </div>
+              </div>
+
+              {/* Terminal Logs Output */}
+              <div className="bg-slate-900 border border-slate-800 rounded-sm p-4 h-64 overflow-y-auto font-mono text-xs space-y-3">
+                {cliLogs.map((log, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                      <span>$ {log.cmd}</span>
+                      <span>{log.time}</span>
+                    </div>
+                    <div className={`p-2 rounded bg-slate-950/80 border border-slate-800/80 whitespace-pre-wrap ${log.type === 'info' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                      {log.output}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Command Input Form */}
+              <form onSubmit={(e) => { e.preventDefault(); runCliCommand(); }} className="flex items-center gap-2">
+                <span className="text-yellow-500 font-mono font-bold text-sm">$</span>
+                <input
+                  type="text"
+                  placeholder="Type command (e.g., 'algokit init', 'tealscript compile', 'goal node status')..."
+                  value={cliInput}
+                  onChange={(e) => setCliInput(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-sm px-3 py-2 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-black text-xs uppercase rounded-sm transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Run
+                </button>
+              </form>
+
+              {/* Quick Command Buttons */}
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
+                <span className="text-[10px] text-slate-500 font-mono w-full block">Quick Developer Commands:</span>
+                {[
+                  "algokit init",
+                  "goal node status",
+                  "tealscript compile",
+                  "algosdk ping",
+                  "clear"
+                ].map((cmd, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => runCliCommand(cmd)}
+                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 font-mono text-[10px] rounded border border-slate-800 transition-colors cursor-pointer"
+                  >
+                    {cmd}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Right Column: Smart Contract Sandbox */}
+            <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm p-5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Code className="w-4 h-4 text-yellow-500" />
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Smart Contract Sandbox</h3>
+                </div>
+                <span className="text-[10px] font-mono bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 px-2 py-0.5 rounded font-bold">TEALScript v0.8</span>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Select Contract Template</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "counter", label: "State Counter" },
+                    { id: "escrow", label: "Atomic Escrow" },
+                    { id: "asa", label: "Token Minter" }
+                  ].map((tpl) => (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => setSelectedTemplate(tpl.id as any)}
+                      className={`p-2.5 rounded text-xs font-bold text-center border transition-all cursor-pointer ${
+                        selectedTemplate === tpl.id
+                          ? "bg-yellow-500 text-slate-950 border-yellow-500 shadow-sm"
+                          : "bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-yellow-500/50"
+                      }`}
+                    >
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">TEALScript Code Preview</span>
+                  <pre className="bg-slate-950 text-emerald-400 p-3 rounded text-[10px] font-mono overflow-x-auto h-36 border border-slate-800">
+                    {selectedTemplate === "counter" && `import { Contract } from '@tealscript/v1'\n\nclass CounterContract extends Contract {\n  count = GlobalStateKey<uint64>()\n\n  @abimethod()\n  increment(): uint64 {\n    this.count.value = this.count.value + 1\n    return this.count.value\n  }\n}`}
+                    {selectedTemplate === "escrow" && `import { Contract } from '@tealscript/v1'\n\nclass EscrowContract extends Contract {\n  @abimethod()\n  release(receiver: Account, amount: uint64): void {\n    sendPayment({ receiver: receiver, amount: amount })\n  }\n}`}
+                    {selectedTemplate === "asa" && `import { Contract } from '@tealscript/v1'\n\nclass TokenMinter extends Contract {\n  @abimethod()\n  mintToken(name: string, total: uint64): Asset {\n    return sendAssetCreation({ configName: name, configTotal: total })\n  }\n}`}
+                  </pre>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={simulateContractDeploy}
+                  className="w-full py-3 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-sm flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  Compile & Deploy to TestNet
+                </button>
+
+                {deployStatus && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded border border-slate-200 dark:border-slate-800 text-xs font-mono text-emerald-500">
+                    {deployStatus}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

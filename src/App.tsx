@@ -16,6 +16,8 @@ import { StorageHub } from "./components/StorageHub";
 import { InteractiveProfessor } from "./components/InteractiveProfessor";
 import { AlgorandPortal } from "./components/AlgorandPortal";
 import { AgentSwarmHub } from "./components/AgentSwarmHub";
+import { VisualArchitectureLearning } from "./components/VisualArchitectureLearning";
+import { LightningRushArena } from "./components/LightningRushArena";
 import { getOfflineHtmlString } from "./utils/offlineTemplate";
 import { 
   GraduationCap, 
@@ -128,6 +130,36 @@ export default function App() {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
   const [isIframe, setIsIframe] = useState<boolean>(false);
+
+  // Unified Error Handling Wrapper & Central State Manager for Firestore/Cloud Operations
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+  const [demoModeReason, setDemoModeReason] = useState<string | null>(null);
+
+  const handleCloudOperation = async <T,>(operationName: string, operationFn: () => Promise<T>, fallbackValue: T): Promise<T> => {
+    if (isDemoMode) {
+      return fallbackValue;
+    }
+    try {
+      return await operationFn();
+    } catch (error: any) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const isDbError = errorMsg.toLowerCase().includes("database not found") || 
+                        errorMsg.includes("503") || 
+                        errorMsg.toLowerCase().includes("quota") || 
+                        errorMsg.toLowerCase().includes("unavailable") || 
+                        errorMsg.toLowerCase().includes("permission_denied") ||
+                        errorMsg.toLowerCase().includes("failed to fetch");
+      
+      if (isDbError) {
+        console.warn(`[Central State Manager] Cloud database error in '${operationName}': ${errorMsg}. Switching App to read-only Demo Mode with cached local data.`);
+        setIsDemoMode(true);
+        setDemoModeReason(`Cloud database error ('${errorMsg.slice(0, 70)}'). Switched to Read-Only Demo Mode with cached local data.`);
+      } else {
+        console.error(`Cloud operation '${operationName}' failed:`, errorMsg);
+      }
+      return fallbackValue;
+    }
+  };
   
   // High fidelity cloud sync stats panel
   const [showSyncStatsPanel, setShowSyncStatsPanel] = useState<boolean>(false);
@@ -225,7 +257,7 @@ export default function App() {
         // Load user's remote cloud progress from Postgres database
         setSyncing(true);
         try {
-          const data = await getProgressFromCloud(currentUser.uid);
+          const data = await handleCloudOperation("getProgressFromCloud", () => getProgressFromCloud(currentUser.uid), null);
           
           // Get local guest state values
           const localHistory = getLocalState("studyHistory", {} as { [key: string]: "known" | "review" | null });
@@ -288,7 +320,7 @@ export default function App() {
           setVaultState(mergedVaultState);
 
           // Save the unified dataset to Postgres Cloud immediately
-          await saveProgressToCloud(currentUser.uid, {
+          await handleCloudOperation("saveProgressToCloud-initial", () => saveProgressToCloud(currentUser.uid, {
             totalStudyMinutes: mergedTotal,
             todayStudyMinutes: mergedToday,
             dailyStudyGoal: mergedGoal,
@@ -298,7 +330,7 @@ export default function App() {
             honePathwayState: mergedHoneState,
             trickSimulatorState: mergedTrickState,
             vaultState: mergedVaultState
-          });
+          }), undefined);
 
           // Clean up the guest keys to keep browser local storage tidy
           localStorage.removeItem("aws_guest_studyHistory_v1");
@@ -312,7 +344,7 @@ export default function App() {
           localStorage.removeItem("aws_guest_vaultState_v1");
 
           // Load interview sessions history
-          const interviewSessions = await getInterviewSessionsFromCloud();
+          const interviewSessions = await handleCloudOperation("getInterviewSessionsFromCloud", () => getInterviewSessionsFromCloud(), []);
           setInterviewHistory(interviewSessions);
           
           setLastSyncTime(new Date());
@@ -511,7 +543,7 @@ export default function App() {
     if (user && hasLoadedCloudData) {
       const delaySave = setTimeout(async () => {
         setSyncing(true);
-        await saveProgressToCloud(user.uid, {
+        await handleCloudOperation("saveProgressToCloud-autosave", () => saveProgressToCloud(user.uid, {
           totalStudyMinutes,
           todayStudyMinutes,
           dailyStudyGoal,
@@ -521,7 +553,7 @@ export default function App() {
           honePathwayState: honeState,
           trickSimulatorState,
           vaultState
-        });
+        }), undefined);
         setLastSyncTime(new Date());
         setSyncing(false);
       }, 1000); // Debounce to avoid overloading write rate
@@ -546,7 +578,7 @@ export default function App() {
     if (!user || syncing || isOffline) return;
     setSyncing(true);
     try {
-      await saveProgressToCloud(user.uid, {
+      await handleCloudOperation("saveProgressToCloud-force", () => saveProgressToCloud(user.uid, {
         totalStudyMinutes,
         todayStudyMinutes,
         dailyStudyGoal,
@@ -556,7 +588,7 @@ export default function App() {
         honePathwayState: honeState,
         trickSimulatorState,
         vaultState
-      });
+      }), undefined);
       setLastSyncTime(new Date());
     } catch (err) {
       console.error("Force sync failed:", err);
@@ -942,6 +974,25 @@ export default function App() {
         </div>
       )}
 
+      {/* Read-Only Demo Mode Active Banner */}
+      {isDemoMode && (
+        <div className="bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-900/50 p-2.5 flex items-center justify-between gap-2 text-amber-800 dark:text-amber-400 text-xs font-bold shrink-0 px-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-[#FF9900]" />
+            <span>⚡ Read-Only Demo Mode Active: {demoModeReason || "Cloud database offline or unavailable ('database not found' or 503). Using cached local data."}</span>
+          </div>
+          <button
+            onClick={() => {
+              setIsDemoMode(false);
+              setDemoModeReason(null);
+            }}
+            className="text-[10px] uppercase tracking-wider px-2 py-1 bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-200 rounded hover:bg-amber-300 transition-colors"
+          >
+            Retry Cloud
+          </button>
+        </div>
+      )}
+
       {/* Redirect Auth Loading feedback */}
       {redirectLoading && (
         <div className="bg-amber-500/10 dark:bg-amber-500/20 border-b border-[#FF9900]/30 p-2.5 flex items-center justify-center gap-2.5 text-amber-800 dark:text-amber-400 text-xs font-bold shrink-0 animate-pulse">
@@ -1062,6 +1113,18 @@ export default function App() {
                 </button>
 
                 <button
+                  onClick={() => handleTabChange("lightning-rush")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
+                    activeTab === "lightning-rush"
+                      ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
+                  Lightning Blitz & Loot
+                </button>
+
+                <button
                   onClick={() => handleTabChange("simulator")}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
                     activeTab === "simulator"
@@ -1086,15 +1149,15 @@ export default function App() {
                 </button>
 
                 <button
-                  onClick={() => handleTabChange("agents")}
+                  onClick={() => handleTabChange("visual-architecture")}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
-                    activeTab === "agents"
+                    activeTab === "visual-architecture"
                       ? "bg-slate-900 text-white shadow-sm dark:bg-slate-800 dark:text-slate-100"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/50"
                   }`}
                 >
-                  <Cpu className="w-4 h-4 shrink-0 text-emerald-500" />
-                  AI Agent Swarm Platform
+                  <Layers className="w-4 h-4 shrink-0 text-indigo-400" />
+                  Visual Architecture Studio
                 </button>
 
                 <button
@@ -1322,6 +1385,14 @@ export default function App() {
               savedState={vaultState}
               onSaveState={setVaultState}
             />
+          )}
+
+          {activeTab === "visual-architecture" && (
+            <VisualArchitectureLearning />
+          )}
+
+          {activeTab === "lightning-rush" && (
+            <LightningRushArena />
           )}
 
           {activeTab === "matching" && (
