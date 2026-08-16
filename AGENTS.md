@@ -81,6 +81,14 @@ The active items on our roadmap are:
     *   **Focus:** Further hardened mobile touch targets, safe area inset padding, smooth momentum scrolling, and responsive button layouts across the entire application for a native app experience on mobile devices and tablets.
 *   **Task 27: Algorand Web Developer CLI & Smart Contract Sandbox (Completed)**
     *   **Focus:** Integrated an interactive AlgoKit CLI terminal and Smart Contract Sandbox into the Algorand Portal (`AlgorandPortal.tsx`). Supports simulated commands (`algokit init`, `goal node status`, `tealscript compile`, `algosdk ping`), live TEALScript code previews (State Counter, Atomic Escrow, Token Minter), and one-click TestNet deployment simulations.
+*   **Task 28: Distractor Vault Overhaul & Stability Hardening (Completed)**
+    *   **Focus:** Resolved dark mode styling and re-render stability issues in `TheDistractorVault.tsx`. Added mastery progress tracking, high-risk trap flagging, interactive TTS speech narration, copy-to-clipboard actions, and interactive 'Test Me On This Trap' mini-quiz challenges. Expanded the Distractor dataset in `src/data.ts` to cover 18+ high-yield AWS CLF-C02 service pairs.
+*   **Task 29: Unified Gamification Engine & Loot Crate System (Completed)**
+    *   **Focus:** Built `src/services/gamificationService.ts` providing reactive study XP progression, levels (500 XP / level), rarity tiers (Common, Rare, Epic, Legendary, Mythic), daily mystery loot drop cooldowns, and animated reward opening states. Deeply integrated into `InteractiveProfessor` for real-time Socratic drilling rewards.
+*   **Task 30: Agent Swarm Bounties & Swarm Loot Terminal Integration (Completed)**
+    *   **Focus:** Integrated the gamification engine directly into `AgentSwarmHub.tsx` and `LightningRushArena.tsx`. Introduced daily autonomous agent bounties (Archie, Guardian, PennyWise, TrapMaster, Alex) with live AI evaluations, mystery crate rewards, inventory vaults, and cross-component XP syncing.
+*   **Task 31: Exam Readiness Milestone Level-Up & Badge System (Completed)**
+    *   **Focus:** Designed and integrated `ReadinessMilestones.tsx` into the primary dashboard view. Provides an animated 4-tier milestone ladder (🥉 Cloud Novice at 25%, 🥈 Cloud Architect at 50%, 🥇 Lead Specialist at 75%, and 👑 Cloud Guru at 100%), with automatic XP and loot crate rewards, confetti level-up celebrations, interactive badge inspection modals, and widget customizer integration.
 
 
 

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GoogleGenAI } from "@google/genai";
 import Markdown from "react-markdown";
 import { getChatHistoryFromCloud, saveChatHistoryToCloud } from "../lib/db-client.js";
 import { 
@@ -28,16 +27,29 @@ import {
   WifiOff,
   RotateCcw,
   FileAudio,
-  X
+  X,
+  Gift,
+  Trophy,
+  Zap,
+  Layers,
+  Cpu,
+  Shield,
+  DollarSign,
+  Maximize2
 } from "lucide-react";
 import { 
   getCachedAudio, 
   saveAudioToCache, 
-  synthesizeFallbackSpeechAudio, 
-  preloadCommonAWSDefinitions, 
-  getCacheStats, 
-  clearAudioCache 
+  synthesizeFallbackSpeechAudio 
 } from "../services/audioCacheService";
+import { 
+  recordProfessorCheckpoint, 
+  getGamificationProfile, 
+  openLootCrate, 
+  LootCrate, 
+  LootItem, 
+  RARITY_COLORS 
+} from "../services/gamificationService";
 import { 
   auth, 
   saveActiveSocraticSessionState, 
@@ -46,11 +58,15 @@ import {
   ActiveSocraticSessionDoc 
 } from "../lib/firebase";
 
+export type TeachingMode = "socratic" | "rapid" | "whiteboard" | "distractor";
+
 interface ChatMessage {
   id: string;
   role: "user" | "model";
   text: string;
   timestamp: string;
+  mode?: TeachingMode;
+  agentCollaborator?: string;
   // Parsed checkpoint data
   hasQuiz?: boolean;
   quizOptions?: { key: string; text: string }[];
@@ -75,48 +91,77 @@ const ELEVENLABS_VOICES = [
 
 const cleanTextForSpeech = (text: string): string => {
   return text
-    .replace(/\*\*([^*]+)\*\*/g, "$1") // Remove bold formatting markers
-    .replace(/\*([^*]+)\*/g, "$1")     // Remove italics formatting markers
-    .replace(/`([^`]+)`/g, "$1")       // Remove inline code tags
-    .replace(/#+\s+(.+)/g, "$1")       // Remove headings markers
-    .replace(/-\s+/g, "")              // Remove bullet points
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Remove link syntax but keep label text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/#+\s+(.+)/g, "$1")
+    .replace(/-\s+/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .trim();
 };
 
-const SYSTEM_INSTRUCTION = `You are 'Professor Cloud'—an elite AWS Solutions Architect and an encouraging, interactive Socratic mentor.
-
+const MODE_SYSTEM_INSTRUCTIONS: Record<TeachingMode, string> = {
+  socratic: `You are 'Professor Cloud'—an elite AWS Solutions Architect and an encouraging, interactive Socratic mentor.
 Socratic Pedagogy Rules:
-1. Deep Socratic Architectural Analysis: Always dive deep into architectural trade-offs, security, cost optimization, and performance instead of giving generic surface-level responses. Ask probing Socratic questions that force the student to justify their architectural choices.
-2. Relatable Context: Begin technical explanations with clear, relatable real-world analogies (e.g., comparing Security Groups to instance-level hotel room security guards, and NACLs to subnet-level border checkpoint gates).
-3. Distractor Alert: Explicitly call out typical keyword pitfalls, vocabulary traps, or misleading options common to the AWS Certified Cloud Practitioner (CLF-C02) exam paper.
-4. Active Checkpoints: Always end your response with a brief, high-yield multiple-choice concept check or scenario riddle to verify user retention.
+1. Deep Socratic Architectural Analysis: Always dive deep into architectural trade-offs, security, cost optimization, and performance instead of generic responses. Ask probing questions that challenge the student to think.
+2. Relatable Context: Begin technical explanations with clear real-world analogies (e.g., Security Groups = hotel room security guards, NACLs = building perimeter guard gate).
+3. Distractor Alert: Explicitly call out typical keyword pitfalls or misleading exam options common to the AWS CLF-C02 exam.
+4. Active Checkpoints: Always end your response with a brief, high-yield multiple-choice concept check or scenario riddle.
 
 Active Checkpoint Formatting Rules (MANDATORY):
-- Provide exactly 4 options labeled A), B), C), and D). Place each option on a new line.
-- Always include the correct answer code in your output inside the exact bracket format at the very bottom of your message: [Answer: X] (where X is A, B, C, or D), so that our system can parse it and render interactive click-buttons for the user. Example: [Answer: C].
-- Example multiple choice format:
-  A) Option A description
-  B) Option B description
-  C) Option C description
-  D) Option D description
-  
-  [Answer: C]`;
+- Provide exactly 4 options labeled A), B), C), and D) on new lines.
+- Always include the correct answer code at the very bottom: [Answer: X] (where X is A, B, C, or D).
+Example:
+A) Option A
+B) Option B
+C) Option C
+D) Option D
+
+[Answer: C]`,
+
+  rapid: `You are 'Professor Cloud' in RAPID EXAM SPRINT mode.
+Rules:
+1. Deliver ultra-concise, high-yield bulleted takeaways for AWS CLF-C02 exam prep.
+2. Highlight exact AWS keywords that guarantee the right answer on the test.
+3. Immediately follow with a lightning-fast scenario checkpoint question.
+4. Active Checkpoint Formatting: Exactly 4 options A), B), C), D) and [Answer: X] at the very end.`,
+
+  whiteboard: `You are 'Professor Cloud' in ARCHITECTURAL WHITEBOARD mode.
+Rules:
+1. Provide ASCII/box-diagram visual architecture representations of the AWS topology requested.
+2. Explain the traffic flow step-by-step with numbers (1, 2, 3...).
+3. Analyze the architecture through the AWS Well-Architected Pillars (Reliability, Security, Cost Optimization).
+4. End with a scenario question testing what happens during a component failure.
+5. Active Checkpoint Formatting: Exactly 4 options A), B), C), D) and [Answer: X] at the very end.`,
+
+  distractor: `You are 'Professor Cloud' in DISTRACTOR TRAP BUSTER mode.
+Rules:
+1. Analyze two or three closely related AWS services that candidates constantly confuse (e.g. WAF vs Shield vs Security Groups, KMS vs CloudHSM, S3 Glacier Flexible vs Deep Archive).
+2. Contrast their exact use cases with a side-by-side breakdown.
+3. Call out the 'trap keywords' the exam uses to deceive candidates.
+4. End with a tricky exam question featuring these distractors.
+5. Active Checkpoint Formatting: Exactly 4 options A), B), C), D) and [Answer: X] at the very end.`
+};
 
 const INITIAL_WELCOME: ChatMessage = {
   id: "welcome-msg",
   role: "model",
-  text: "Hello, Practitioner! I am **Professor Cloud**, your Socratic mentor. Let's conquer the AWS CLF-C02 certification together! I'll explain complex cloud concepts using simple real-world analogies, warn you about sneaky exam distractors, and give you active checkpoints along the way.\n\nWhat AWS topic are we tackling today? Select a quick-study topic below or type your own question!",
-  timestamp: new Date().toISOString()
+  text: "Hello, Practitioner! I am **Professor Cloud**, your Socratic AWS mentor. Let's master the AWS Certified Cloud Practitioner (CLF-C02) exam!\n\nI can explain architecture with real-world analogies, draw whiteboard topologies, deconstruct tricky distractors, and quiz you on key concepts. Choose a study mode above or pick a high-yield topic below to begin!",
+  timestamp: new Date().toISOString(),
+  mode: "socratic"
 };
 
 export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user, onAddMinutes, aiModelMode = "expert" }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_WELCOME]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [isKeySetupOpen, setIsKeySetupOpen] = useState(false);
+  const [activeMode, setActiveMode] = useState<TeachingMode>("socratic");
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // Gamification states
+  const [earnedXPToast, setEarnedXPToast] = useState<{ amount: number; message: string } | null>(null);
+  const [droppedCrate, setDroppedCrate] = useState<LootCrate | null>(null);
+  const [openedCrateReward, setOpenedCrateReward] = useState<{ crate: LootCrate; rewards: LootItem[] } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -150,7 +195,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     }
   };
 
-  // Audio lifecycle cleanup on unmount
+  // Cleanup audio on unmount
   useEffect(() => {
     return () => {
       if (audioRef.current) {
@@ -178,9 +223,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
       const cleanedText = cleanTextForSpeech(text);
       const response = await fetch("/api/elevenlabs/tts", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: cleanedText,
           voiceId: selectedVoiceId
@@ -188,8 +231,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
       });
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({ error: "Failed to connect to ElevenLabs proxy." }));
-        throw new Error(errData.error || "Failed to generate speech stream.");
+        throw new Error("Speech synthesis request failed. Falling back to local browser speech.");
       }
 
       const audioBlob = await response.blob();
@@ -212,26 +254,17 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
       audio.onerror = () => {
         setLoadingMessageId(null);
         setPlayingMessageId(null);
-        alert("Unable to decode or load the ElevenLabs audio track.");
+        synthesizeFallbackSpeechAudio(cleanedText);
       };
 
       await audio.play();
     } catch (error: any) {
-      console.error("Speech play error:", error);
+      console.warn("ElevenLabs TTS fallback:", error);
       setLoadingMessageId(null);
       setPlayingMessageId(null);
-      alert(error.message || "Failed to synthesize voice with ElevenLabs. Please verify your ElevenLabs key is correct and set up.");
+      synthesizeFallbackSpeechAudio(cleanTextForSpeech(text));
     }
   };
-
-  // Retrieve stored API key or env key
-  const [apiKey, setApiKey] = useState<string>(() => {
-    const saved = localStorage.getItem("aws_professor_api_key");
-    if (saved) return saved;
-    // Fallback to Vite public env variable
-    const metaEnv = (import.meta as any).env;
-    return (metaEnv?.VITE_GEMINI_API_KEY as string) || "";
-  });
 
   // Active Socratic Session Resume State
   const [activeSessionDoc, setActiveSessionDoc] = useState<ActiveSocraticSessionDoc | null>(null);
@@ -293,7 +326,6 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     }
   }, [user]);
 
-  // Save chat history to Postgres or localStorage and Firestore active session
   const saveHistory = async (newMessages: ChatMessage[]) => {
     setMessages(newMessages);
     if (user) {
@@ -307,21 +339,17 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     }
   };
 
-  // Scroll to bottom when messages change or loading state changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
   // Helper to parse Professor messages for concept check quizzes
   const parseProfessorMessage = (text: string) => {
-    // Extract [Answer: X]
     const answerMatch = text.match(/\[Answer:\s*([A-D])\]/i);
     const answer = answerMatch ? answerMatch[1].toUpperCase() : undefined;
 
-    // Clean the text by removing the [Answer: X] block
     let cleanedText = text.replace(/\[Answer:\s*([A-D])\]/gi, "").trim();
 
-    // Parse options starting with A), B), C), D) or A., B., C., D.
     const lines = cleanedText.split("\n");
     const options: { key: string; text: string }[] = [];
     
@@ -342,17 +370,6 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     };
   };
 
-  // Handle setting API key manually
-  const handleSaveApiKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsKeySetupOpen(false);
-    setApiError(null);
-  };
-
-  const handleClearApiKey = () => {
-    // No-op since we use server API
-  };
-
   const handleResetChat = async () => {
     if (window.confirm("Are you sure you want to reset your conversation history with Professor Cloud?")) {
       if (user?.uid && currentSessionId) {
@@ -366,7 +383,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
   };
 
   const handleExportChat = () => {
-    const textToSave = messages.map(m => `[${m.role.toUpperCase()}]\n${m.text}`).join('\n\n---\n\n');
+    const textToSave = messages.map(m => `[${m.role.toUpperCase()} - ${m.mode || 'Socratic'}]\n${m.text}`).join('\n\n---\n\n');
     const blob = new Blob([textToSave], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -377,7 +394,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
   };
 
   // Send message to Gemini
-  const handleSendMessage = async (textToSend: string) => {
+  const handleSendMessage = async (textToSend: string, summonedAgent?: string) => {
     if (!textToSend.trim() || isLoading) return;
 
     setApiError(null);
@@ -385,7 +402,9 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
       id: `user-${Date.now()}`,
       role: "user",
       text: textToSend,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      mode: activeMode,
+      agentCollaborator: summonedAgent
     };
 
     const updatedHistory = [...messages, userMessage];
@@ -393,26 +412,28 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     setInputText("");
     setIsLoading(true);
 
-    // Credit user with +2 minutes of study time on send
     if (onAddMinutes) {
       onAddMinutes(2);
     }
 
     try {
-      // Build stateless history structure matching the SDK Content type
       const contents = updatedHistory.map(msg => ({
         role: msg.role === "user" ? "user" : "model",
         parts: [{ text: msg.text }]
       }));
 
-      // Call Gemini model through our server proxy using BUSCACHE layer
+      const activeSystemInstruction = MODE_SYSTEM_INSTRUCTIONS[activeMode] || MODE_SYSTEM_INSTRUCTIONS.socratic;
+      const finalInstruction = summonedAgent
+        ? `${activeSystemInstruction}\n\nSPECIAL COLLABORATION: The user has summoned Swarm Agent ${summonedAgent}. Incorporate their specialized perspective into your answer!`
+        : activeSystemInstruction;
+
       const apiResponse = await fetch("/api/gemini/professor-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents,
           aiModelMode,
-          systemInstruction: SYSTEM_INSTRUCTION
+          systemInstruction: finalInstruction
         })
       });
       
@@ -421,7 +442,6 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
       }
       
       const response = await apiResponse.json();
-      
       if (response.error) {
         throw new Error(response.error);
       }
@@ -434,6 +454,7 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
         role: "model",
         text: parsed.cleanedText,
         timestamp: new Date().toISOString(),
+        mode: activeMode,
         hasQuiz: parsed.options.length > 0 && !!parsed.answer,
         quizOptions: parsed.options,
         quizAnswer: parsed.answer,
@@ -442,36 +463,63 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
       saveHistory([...updatedHistory, professorMessage]);
     } catch (err: any) {
       console.error("Gemini API error:", err);
-      setApiError(err.message || "Failed to communicate with Gemini API. Please check your network or key.");
-      // Remove last user message so they can retry
+      setApiError(err.message || "Failed to communicate with Gemini API. Please check your network.");
       saveHistory(messages);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Preset prompts
+  // Swarm Agent Summon Shortcut
+  const handleSummonAgent = (agentName: string, role: string) => {
+    const prompt = `@${agentName} (${role}): What is your specialized take and architecture advice for the current AWS exam concept?`;
+    handleSendMessage(prompt, agentName);
+  };
+
+  // Quick Action Preset triggers
   const triggerPreset = (topic: string) => {
     let promptText = "";
     if (topic === "security") {
       promptText = "Professor, can you explain the differences between Security Groups and Network Access Control Lists (NACLs) using a clear Socratic analogy, and give me a practice concept check?";
     } else if (topic === "responsibility") {
       promptText = "Professor, can you break down the AWS Shared Responsibility Model (what AWS is responsible for vs. what the customer is responsible for) with a simple analogy and a practice question?";
-    } else if (topic === "support") {
-      promptText = "Professor, can you explain the differences between Basic, Developer, Business, and Enterprise Support tiers in AWS with a real-world comparison and a concept check question?";
+    } else if (topic === "whiteboard_vpc") {
+      setActiveMode("whiteboard");
+      promptText = "Professor, please whiteboard a high-availability 3-tier VPC architecture diagram (ALB, Web Tier, App Tier, Multi-AZ Database) and test me with a failover scenario.";
+    } else if (topic === "s3_tiers") {
+      setActiveMode("distractor");
+      promptText = "Professor, break down the exact differences and cost traps between S3 Standard, S3 Standard-IA, S3 Glacier Flexible Retrieval, and S3 Glacier Deep Archive.";
+    } else if (topic === "serverless") {
+      setActiveMode("whiteboard");
+      promptText = "Professor, whiteboard an event-driven serverless architecture using API Gateway, AWS Lambda, DynamoDB, and Amazon EventBridge.";
+    } else if (topic === "kms") {
+      setActiveMode("distractor");
+      promptText = "Professor, expose the exam traps comparing AWS KMS vs AWS CloudHSM vs AWS Secrets Manager vs AWS Systems Manager Parameter Store.";
     }
     handleSendMessage(promptText);
   };
 
-  // Handle quiz option selection
+  // Handle quiz option selection with real-time gamification
   const handleSelectQuizOption = (messageId: string, optionKey: string) => {
     const updated = messages.map(msg => {
       if (msg.id === messageId && msg.quizAnswer) {
         const isCorrect = optionKey.toUpperCase() === msg.quizAnswer.toUpperCase();
         
-        // If correct, award +2 study minutes!
-        if (isCorrect && !msg.userSelectedAnswer && onAddMinutes) {
-          onAddMinutes(2);
+        if (!msg.userSelectedAnswer) {
+          const result = recordProfessorCheckpoint(isCorrect);
+          setEarnedXPToast({
+            amount: result.xpEarned,
+            message: isCorrect ? "🎯 Correct Socratic Concept Check!" : "💡 Good Practice Attempt!"
+          });
+          setTimeout(() => setEarnedXPToast(null), 4000);
+
+          if (result.crateDropped) {
+            setDroppedCrate(result.crateDropped);
+          }
+
+          if (isCorrect && onAddMinutes) {
+            onAddMinutes(2);
+          }
         }
 
         return {
@@ -485,99 +533,150 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     saveHistory(updated);
   };
 
+  const handleOpenDroppedCrate = (crate: LootCrate) => {
+    try {
+      const outcome = openLootCrate(crate.id);
+      setOpenedCrateReward(outcome);
+      setDroppedCrate(null);
+    } catch (err) {
+      console.error("Failed to open crate:", err);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-[650px] bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[720px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden relative">
       
       {/* HEADER BAR */}
-      <div className="bg-slate-900 px-4 py-3.5 flex items-center justify-between border-b border-slate-800">
+      <div className="bg-slate-900 px-4 py-3 flex flex-wrap items-center justify-between border-b border-slate-800 gap-3">
+        
+        {/* Left: Identity */}
         <div className="flex items-center gap-2.5">
-          <div className="bg-gradient-to-br from-amber-500 to-[#FF9900] p-1.5 rounded-sm shrink-0">
+          <div className="bg-gradient-to-br from-amber-500 to-[#FF9900] p-2 rounded-md shrink-0 shadow-sm">
             <GraduationCap className="w-5 h-5 text-white" />
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
-              <h3 className="text-xs font-black text-white uppercase tracking-widest leading-none">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider leading-none">
                 Professor Cloud
               </h3>
-              <span className="text-[9px] bg-amber-500/10 text-[#FF9900] font-bold px-1.5 py-0.5 rounded border border-amber-500/20 uppercase font-mono">
-                Socratic AI
+              <span className="text-[10px] bg-amber-500/20 text-[#FF9900] font-bold px-2 py-0.5 rounded border border-amber-500/30 uppercase font-mono">
+                Socratic AI Mentor
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-1 font-bold">
-              AWS Solutions Architect & Pedagogue
+            <p className="text-[11px] text-slate-400 mt-1 font-medium flex items-center gap-1.5">
+              <span>AWS Solutions Architect</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-amber-400 font-mono text-[10px]">CLF-C02 Specialist</span>
             </p>
           </div>
         </div>
 
-        {/* Header Controls */}
-        <div className="flex items-center gap-3">
-          {/* ElevenLabs Voice Selection & Audio Preferences Suite */}
-          <div className="hidden sm:flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300 shadow-inner">
-              <Volume2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <select
-                id="professor-voice-select"
-                value={selectedVoiceId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedVoiceId(val);
-                  localStorage.setItem("aws_professor_voice_id", val);
-                }}
-                className="bg-transparent border-none text-[10px] font-bold font-mono focus:outline-none text-slate-200 cursor-pointer pr-1"
-                title="Change Professor voice synthesis tone"
-              >
-                {ELEVENLABS_VOICES.map((v) => (
-                  <option key={v.id} value={v.id} className="bg-slate-900 text-slate-100 font-sans font-semibold">
-                    Voice: {v.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* Center: Teaching Mode Tabs */}
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-md border border-slate-800">
+          <button
+            onClick={() => setActiveMode("socratic")}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 ${
+              activeMode === "socratic" 
+                ? "bg-[#FF9900] text-slate-950 shadow-xs" 
+                : "text-slate-400 hover:text-white"
+            }`}
+            title="Socratic Deep Mentorship & Analogies"
+          >
+            <GraduationCap className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Socratic</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveMode("rapid")}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 ${
+              activeMode === "rapid" 
+                ? "bg-[#FF9900] text-slate-950 shadow-xs" 
+                : "text-slate-400 hover:text-white"
+            }`}
+            title="Rapid High-Yield Exam Sprint"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Rapid Sprint</span>
+          </button>
 
-            {/* Speech Rate Controls */}
-            <div className="hidden md:flex items-center gap-1 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300 shadow-inner">
-              <span className="font-mono font-bold text-[9px] text-[#FF9900] tracking-tight">SPEED:</span>
-              <select
-                value={speechRate}
-                onChange={(e) => updateAudioRate(parseFloat(e.target.value))}
-                className="bg-transparent border-none text-[10px] font-extrabold font-mono focus:outline-none text-slate-200 cursor-pointer"
-                title="Adjust Narrator Playback Speed"
-              >
-                <option value="0.8" className="bg-slate-900">0.8x</option>
-                <option value="1.0" className="bg-slate-900">1.0x (Normal)</option>
-                <option value="1.2" className="bg-slate-900">1.2x (Fast)</option>
-                <option value="1.5" className="bg-slate-900">1.5x (Sprint)</option>
-              </select>
-            </div>
+          <button
+            onClick={() => setActiveMode("whiteboard")}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 ${
+              activeMode === "whiteboard" 
+                ? "bg-[#FF9900] text-slate-950 shadow-xs" 
+                : "text-slate-400 hover:text-white"
+            }`}
+            title="Whiteboard Cloud Architecture Topology Diagrams"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Whiteboard</span>
+          </button>
 
-            {/* Speech Volume slider */}
-            <div className="hidden lg:flex items-center gap-1.5 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300 shadow-inner">
-              <span className="font-mono font-bold text-[9px] text-[#FF9900] tracking-tight">VOL:</span>
-              <input 
-                type="range"
-                min="0.1"
-                max="1.0"
-                step="0.1"
-                value={speechVolume}
-                onChange={(e) => updateAudioVolume(parseFloat(e.target.value))}
-                className="w-12 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#FF9900]"
-                title={`TTS Volume: ${Math.round(speechVolume * 100)}%`}
-              />
-            </div>
+          <button
+            onClick={() => setActiveMode("distractor")}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 ${
+              activeMode === "distractor" 
+                ? "bg-[#FF9900] text-slate-950 shadow-xs" 
+                : "text-slate-400 hover:text-white"
+            }`}
+            title="Expose & Bust Sneaky Exam Traps"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Trap Buster</span>
+          </button>
+        </div>
+
+        {/* Right: Audio & Controls */}
+        <div className="flex items-center gap-2">
+          {/* ElevenLabs Voice Selection */}
+          <div className="hidden md:flex items-center gap-1.5 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300">
+            <Volume2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <select
+              value={selectedVoiceId}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedVoiceId(val);
+                localStorage.setItem("aws_professor_voice_id", val);
+              }}
+              className="bg-transparent border-none text-[10px] font-bold font-mono focus:outline-none text-slate-200 cursor-pointer pr-1"
+            >
+              {ELEVENLABS_VOICES.map((v) => (
+                <option key={v.id} value={v.id} className="bg-slate-900 text-slate-100 font-sans font-semibold">
+                  {v.name} ({v.label})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Speed Pills */}
+          <div className="hidden lg:flex items-center gap-1 bg-slate-800 border border-slate-700/60 rounded px-1.5 py-1 text-[10px]">
+            {[0.8, 1.0, 1.25, 1.5].map((rate) => (
+              <button
+                key={rate}
+                onClick={() => updateAudioRate(rate)}
+                className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold cursor-pointer ${
+                  speechRate === rate 
+                    ? "bg-[#FF9900] text-slate-950" 
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                {rate}x
+              </button>
+            ))}
           </div>
 
           <button
             onClick={handleExportChat}
             className="text-slate-400 hover:text-[#FF9900] text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
-            title="Export Chat History"
+            title="Export Notes"
           >
-            <Download className="w-3 h-3" />
-            Save Notes
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Save</span>
           </button>
 
           <button
             onClick={handleResetChat}
-            className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors cursor-pointer"
             title="Reset Chat Session"
           >
             <Trash2 className="w-4 h-4" />
@@ -585,393 +684,443 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
         </div>
       </div>
 
-      {/* Resume Active Session Banner */}
-      {activeSessionDoc && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between gap-3 animate-fade-in text-slate-200">
+      {/* Floating XP Notification Toast */}
+      {earnedXPToast && (
+        <div className="absolute top-16 right-4 z-50 bg-slate-900 border border-[#FF9900] text-white px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-3 animate-bounce">
+          <div className="p-1.5 bg-[#FF9900] text-slate-950 rounded-full font-black">
+            <Zap className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs font-black text-amber-400">+{earnedXPToast.amount} Exam XP!</div>
+            <div className="text-[10px] text-slate-300">{earnedXPToast.message}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Mystery Loot Crate Drop Alert */}
+      {droppedCrate && (
+        <div className="bg-gradient-to-r from-pink-900/90 via-purple-900/90 to-indigo-900/90 border-b border-pink-500/40 px-4 py-3 text-white flex items-center justify-between gap-3 animate-pulse">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded bg-amber-500/20 text-amber-400">
-              <Play className="w-4 h-4 fill-amber-400" />
+            <div className="p-2 bg-pink-500 text-white rounded-lg shadow-md">
+              <Gift className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-black text-amber-400 flex items-center gap-1.5">
-                Active Socratic Session Found!
-                <span className="text-[10px] font-mono font-normal text-slate-400">
-                  ({activeSessionDoc.messages?.length || 0} messages)
-                </span>
-              </p>
-              <p className="text-[11px] text-slate-400">
-                You have an unfinished chat with Professor Cloud from {new Date(activeSessionDoc.updatedAt || activeSessionDoc.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
-              </p>
+              <div className="text-xs font-black uppercase tracking-wider text-pink-300">
+                🎁 Mystery Loot Crate Discovered!
+              </div>
+              <div className="text-xs text-slate-200">
+                {droppedCrate.title} ({droppedCrate.rarity.toUpperCase()})
+              </div>
             </div>
+          </div>
+          <button
+            onClick={() => handleOpenDroppedCrate(droppedCrate)}
+            className="px-4 py-2 bg-gradient-to-r from-pink-500 to-[#FF9900] text-slate-950 font-black text-xs rounded-md shadow-lg hover:scale-105 transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Open Crate Now
+          </button>
+        </div>
+      )}
+
+      {/* Opened Crate Reward Modal */}
+      {openedCrateReward && (
+        <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-amber-500/50 p-6 rounded-xl max-w-md w-full text-center space-y-4 shadow-2xl text-white relative">
+            <button 
+              onClick={() => setOpenedCrateReward(null)}
+              className="absolute top-3 right-3 text-slate-400 hover:text-white p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="w-16 h-16 bg-amber-500/20 text-[#FF9900] rounded-2xl flex items-center justify-center mx-auto border border-amber-500/30">
+              <Trophy className="w-8 h-8 animate-bounce" />
+            </div>
+            <h3 className="text-lg font-black uppercase tracking-wide text-[#FF9900]">
+              Loot Unlocked!
+            </h3>
+            {openedCrateReward.rewards.map((r, i) => (
+              <div key={i} className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-left space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-white flex items-center gap-1.5">
+                    <span>{r.icon}</span>
+                    {r.name}
+                  </span>
+                  <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">
+                    {r.rarity}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">{r.description}</p>
+              </div>
+            ))}
+            <button
+              onClick={() => setOpenedCrateReward(null)}
+              className="w-full py-2.5 bg-[#FF9900] text-slate-950 font-black text-xs rounded-md shadow hover:bg-amber-500 transition-colors cursor-pointer"
+            >
+              Claim to Inventory
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Resume Active Session Banner */}
+      {activeSessionDoc && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between gap-3 animate-fade-in text-slate-200">
+          <div className="flex items-center gap-2">
+            <Play className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
+            <p className="text-xs text-slate-300">
+              Active Socratic chat found ({activeSessionDoc.messages?.length || 0} msgs).
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleDismissActiveSocraticSession}
-              className="px-2.5 py-1 text-xs text-slate-400 hover:text-white font-bold cursor-pointer"
+              className="text-xs text-slate-400 hover:text-white px-2 py-1 font-bold cursor-pointer"
             >
-              Start Fresh
+              Dismiss
             </button>
             <button
               onClick={handleResumeActiveSocraticSession}
-              className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded flex items-center gap-1 shadow-sm cursor-pointer"
+              className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded shadow-xs cursor-pointer"
             >
-              <Play className="w-3 h-3 fill-slate-950" />
-              <span>Resume Session</span>
+              Resume
             </button>
           </div>
         </div>
       )}
 
-      {/* CONDITIONAL KEY SETUP DRAWER / MODAL PANEL - Now unused because API key is loaded in backend */}
-      {(false) ? (
-        <div className="flex-1 bg-slate-900 text-slate-100 p-6 flex flex-col justify-center items-center space-y-6 text-center animate-fade-in relative z-10">
-          <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-full text-[#FF9900] animate-bounce">
-            <Key className="w-8 h-8" />
+      {/* CHAT BUBBLES CONSOLE */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950">
+        
+        {/* Sync Status Pill */}
+        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 px-2">
+          <div className="flex items-center gap-1.5 font-bold font-mono">
+            <span className={`w-2 h-2 rounded-full ${user ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            {user ? "Cloud Synced Storage Active" : "Local Sandbox Mode"}
           </div>
-          <div className="max-w-md space-y-2">
-            <h4 className="text-sm font-black uppercase tracking-wider text-white">
-              Socratic Professor Setup
-            </h4>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Professor Cloud uses the client-side Google Gemini SDK to drive custom Socratic reasoning. To start, enter your Gemini API Key below.
-            </p>
-            <div className="bg-slate-950 p-3 rounded border border-slate-800 text-left space-y-1.5 mt-2">
-              <span className="text-[9px] uppercase font-bold text-amber-500 font-mono tracking-widest block flex items-center gap-1">
-                <ShieldAlert className="w-3 h-3 text-amber-500" />
-                Security Note
-              </span>
-              <p className="text-[10px] text-slate-500 leading-normal">
-                Your key is strictly stored in your local browser sandbox (<code className="bg-slate-900 text-slate-300 px-1 py-0.5 rounded text-[9px]">localStorage</code>) and sent directly to Google APIs. It is never transmitted to secondary servers.
-              </p>
-            </div>
+          <div className="flex items-center gap-2 font-mono">
+            <span>Mode: <strong className="text-[#FF9900] uppercase">{activeMode}</strong></span>
           </div>
-
-          <form onSubmit={handleSaveApiKey} className="w-full max-w-sm space-y-3">
-            <div className="space-y-1">
-              <input
-                type="password"
-                required
-                placeholder="Pasted AI Studio API Key (AIzaSy...)"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 text-xs rounded text-white focus:outline-none focus:border-[#FF9900]"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="flex-1 py-2 bg-gradient-to-r from-amber-500 to-[#FF9900] text-slate-950 text-xs font-black uppercase tracking-wider rounded transition-all hover:opacity-90 cursor-pointer"
-              >
-                Connect Professor
-              </button>
-              {apiKey && (
-                <button
-                  type="button"
-                  onClick={() => setIsKeySetupOpen(false)}
-                  className="px-4 py-2 border border-slate-800 hover:bg-slate-800 text-slate-400 text-xs rounded cursor-pointer transition-colors"
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-
-          <p className="text-[10px] text-slate-500">
-            Need a key? Grab a free or tier-based key inside the <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="text-[#FF9900] hover:underline">Google AI Studio Console</a>.
-          </p>
         </div>
-      ) : (
-        <>
-          {/* CHAT BUBBLE CONSOLE VIEW */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
-            
-            {/* Session Status Banner */}
-            <div className={`p-2.5 rounded-sm border text-[10px] flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-              user 
-                ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-800' 
-                : 'bg-amber-500/5 border-amber-500/10 text-amber-800'
-            }`}>
-              <div className="flex items-center gap-1.5 font-extrabold uppercase tracking-widest shrink-0">
-                <span className={`w-2 h-2 rounded-full ${user ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                {user ? "Cloud Sync Secured" : "Guest Sandbox active"}
+        
+        {messages.map((msg) => (
+          <div 
+            key={msg.id} 
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
+          >
+            <div className={`max-w-[88%] flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+              
+              {/* Avatar Icons */}
+              <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 border ${
+                msg.role === "user" 
+                  ? "bg-slate-900 dark:bg-slate-800 border-slate-700 text-white shadow-xs" 
+                  : "bg-[#FF9900]/10 border-[#FF9900]/30 text-[#FF9900]"
+              }`}>
+                {msg.role === "user" ? (
+                  <span className="text-[10px] font-black font-mono">YOU</span>
+                ) : (
+                  <Bot className="w-4 h-4 text-[#FF9900]" />
+                )}
               </div>
-              <span className="font-semibold text-slate-500 dark:text-slate-400 text-[10px] leading-tight">
-                {user 
-                  ? "Your conversational history with Professor Cloud is fully preserved in Cloud Run storage." 
-                  : "Conversations are kept in local storage. Connect a Google Account on the dashboard to save sessions permanently."
-                }
-              </span>
-            </div>
-            
-            {messages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
-              >
-                <div className={`max-w-[85%] flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                  
-                  {/* Avatar Icons */}
-                  <div className={`w-8 h-8 rounded-sm flex items-center justify-center shrink-0 border ${
-                    msg.role === "user" 
-                      ? "bg-slate-900 border-slate-800 text-white" 
-                      : "bg-[#FF9900]/10 border-[#FF9900]/20 text-[#FF9900]"
-                  }`}>
-                    {msg.role === "user" ? (
-                      <span className="text-[10px] font-black font-mono">ME</span>
-                    ) : (
-                      <Bot className="w-4 h-4 text-[#FF9900]" />
-                    )}
-                  </div>
 
-                  {/* Bubble Content */}
-                  <div className="space-y-3 relative group">
-                    <div className={`p-3.5 rounded-sm shadow-sm border text-xs leading-relaxed overflow-hidden ${
-                      msg.role === "user"
-                        ? "bg-slate-900 border-slate-800 text-white rounded-tr-none"
-                        : "bg-white border-slate-200 text-slate-800 rounded-tl-none prose prose-sm prose-slate max-w-none"
-                    }`}>
-                      {msg.role === "user" ? (
-                        <span className="whitespace-pre-wrap">{msg.text}</span>
+              {/* Bubble Content */}
+              <div className="space-y-3 relative group w-full">
+                <div className={`p-4 rounded-lg shadow-xs border text-xs leading-relaxed overflow-hidden ${
+                  msg.role === "user"
+                    ? "bg-slate-900 dark:bg-slate-800 border-slate-700 text-white rounded-tr-none"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none prose prose-sm prose-slate dark:prose-invert max-w-none"
+                }`}>
+                  {msg.role === "user" ? (
+                    <span className="whitespace-pre-wrap font-medium">{msg.text}</span>
+                  ) : (
+                    <div className="markdown-body">
+                      <Markdown>{msg.text}</Markdown>
+                    </div>
+                  )}
+                </div>
+
+                {/* Message Audio / Copy Toolbar */}
+                {msg.role === "model" && (
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <button
+                      onClick={() => handlePlaySpeech(msg.id, msg.text)}
+                      className={`text-[11px] font-bold px-2 py-1 rounded transition-colors flex items-center gap-1.5 cursor-pointer border ${
+                        playingMessageId === msg.id 
+                          ? "bg-amber-500 text-slate-950 border-amber-500 shadow-sm animate-pulse" 
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-[#FF9900]"
+                      }`}
+                      title={playingMessageId === msg.id ? "Stop Narration" : "Listen with Professor Voice"}
+                      disabled={loadingMessageId === msg.id}
+                    >
+                      {loadingMessageId === msg.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF9900]" />
+                      ) : playingMessageId === msg.id ? (
+                        <VolumeX className="w-3.5 h-3.5 text-slate-950" />
                       ) : (
-                        <div className="markdown-body">
-                          <Markdown>{msg.text}</Markdown>
-                        </div>
+                        <Volume2 className="w-3.5 h-3.5" />
                       )}
+                      <span>{playingMessageId === msg.id ? "Listening..." : "Listen"}</span>
+
+                      {/* Visual Soundwave Animation */}
+                      {playingMessageId === msg.id && (
+                        <span className="flex items-center gap-0.5 ml-1">
+                          <span className="w-0.5 h-2.5 bg-slate-950 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="w-0.5 h-3.5 bg-slate-950 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="w-0.5 h-2 bg-slate-950 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => navigator.clipboard.writeText(msg.text)}
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Copy message text"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* PARSED SOCRATIC CHECKPOINT QUIZ */}
+                {msg.role === "model" && msg.hasQuiz && msg.quizOptions && msg.quizOptions.length > 0 && (
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg shadow-md space-y-3">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-[#FF9900] tracking-wider uppercase font-mono">
+                      <span className="flex items-center gap-1.5">
+                        <Flame className="w-4 h-4 text-amber-500 fill-amber-500/20 animate-pulse" />
+                        Socratic Active Checkpoint
+                      </span>
+                      <span className="text-emerald-400 font-mono">+50 XP & Loot Drop</span>
+                    </div>
+                    
+                    <p className="text-xs text-slate-300 font-medium">
+                      Select the correct answer to test your retention and earn mastery XP:
+                    </p>
+
+                    <div className="grid grid-cols-1 gap-2">
+                      {msg.quizOptions.map((opt, optIdx) => {
+                        const isSelected = msg.userSelectedAnswer === opt.key;
+                        const isAnswerCorrect = opt.key === msg.quizAnswer;
+                        const showResult = !!msg.userSelectedAnswer;
+
+                        let buttonStyle = "bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white";
+                        if (showResult) {
+                          if (isAnswerCorrect) {
+                            buttonStyle = "bg-emerald-950/90 border-emerald-500 text-emerald-300 font-bold";
+                          } else if (isSelected) {
+                            buttonStyle = "bg-rose-950/90 border-rose-500 text-rose-300 font-bold";
+                          } else {
+                            buttonStyle = "bg-slate-950/40 border-slate-900 text-slate-600 opacity-40";
+                          }
+                        }
+
+                        return (
+                          <button
+                            key={`${msg.id}-${opt.key}-${optIdx}`}
+                            disabled={showResult}
+                            onClick={() => handleSelectQuizOption(msg.id, opt.key)}
+                            className={`w-full text-left p-3 rounded-md border text-xs font-semibold transition-all flex items-start gap-3 ${buttonStyle} ${!showResult && "cursor-pointer hover:translate-x-1"}`}
+                          >
+                            <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 border ${
+                              showResult && isAnswerCorrect 
+                                ? "bg-emerald-500/20 border-emerald-500 text-emerald-400" 
+                                : showResult && isSelected 
+                                ? "bg-rose-500/20 border-rose-500 text-rose-400" 
+                                : "bg-slate-800 border-slate-700 text-slate-400"
+                            }`}>
+                              {opt.key}
+                            </span>
+                            <span className="leading-snug pt-0.5">{opt.text}</span>
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    {/* Message Action Controls (Copy & Listen) for Model responses */}
-                    {msg.role === "model" && (
-                      <div className="absolute -top-3 -right-2.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 z-20">
-                        {/* ElevenLabs TTS Play/Stop Button */}
-                        <button
-                          onClick={() => handlePlaySpeech(msg.id, msg.text)}
-                          className={`bg-white border text-slate-500 p-1.5 rounded-sm shadow-sm cursor-pointer transition-colors ${
-                            playingMessageId === msg.id 
-                              ? "border-amber-500 text-amber-500 hover:text-amber-600 bg-amber-50" 
-                              : "border-slate-200 hover:text-[#FF9900]"
-                          }`}
-                          title={playingMessageId === msg.id ? "Stop reading" : "Read aloud with Socratic Professor Voice"}
-                          disabled={loadingMessageId === msg.id}
-                        >
-                          {loadingMessageId === msg.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF9900]" />
-                          ) : playingMessageId === msg.id ? (
-                            <VolumeX className="w-3.5 h-3.5 text-red-500 animate-pulse" />
-                          ) : (
-                            <Volume2 className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => navigator.clipboard.writeText(msg.text)}
-                          className="bg-white border border-slate-200 text-slate-500 hover:text-[#FF9900] p-1.5 rounded-sm shadow-sm cursor-pointer"
-                          title="Copy to clipboard"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* INTERACTIVE QUIZ CARD (Parsed checkpoint) */}
-                    {msg.role === "model" && msg.hasQuiz && msg.quizOptions && msg.quizOptions.length > 0 && (
-                      <div className="bg-slate-900 border border-slate-800 p-4 rounded-sm shadow-md space-y-3 max-w-full">
-                        <div className="flex items-center gap-1.5 text-[9px] font-bold text-[#FF9900] tracking-widest uppercase font-mono">
-                          <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500/10 animate-pulse" />
-                          Professor Checkpoint Quiz
-                        </div>
-                        
-                        <p className="text-[11px] text-slate-300 font-medium">
-                          Select the correct answer below to verify your retention and score <span className="text-emerald-400 font-extrabold">+2 mins study goal credit</span>:
-                        </p>
-
-                        <div className="grid grid-cols-1 gap-2">
-                          {msg.quizOptions.map((opt, optIdx) => {
-                            const isSelected = msg.userSelectedAnswer === opt.key;
-                            const isAnswerCorrect = opt.key === msg.quizAnswer;
-                            const showResult = !!msg.userSelectedAnswer;
-
-                            let buttonStyle = "bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white";
-                            if (showResult) {
-                              if (isAnswerCorrect) {
-                                buttonStyle = "bg-emerald-950/80 border-emerald-500 text-emerald-300";
-                              } else if (isSelected) {
-                                buttonStyle = "bg-rose-950/80 border-rose-500 text-rose-300";
-                              } else {
-                                buttonStyle = "bg-slate-950/50 border-slate-900 text-slate-600 opacity-50";
-                              }
-                            }
-
-                            return (
-                              <button
-                                key={`${msg.id}-${opt.key}-${optIdx}`}
-                                disabled={showResult}
-                                onClick={() => handleSelectQuizOption(msg.id, opt.key)}
-                                className={`w-full text-left p-2.5 rounded-sm border text-xs font-bold transition-all flex items-start gap-2.5 ${buttonStyle} ${!showResult && "cursor-pointer hover:translate-x-1"}`}
-                              >
-                                <span className={`w-5 h-5 rounded-sm text-[10px] font-bold flex items-center justify-center shrink-0 border ${
-                                  showResult && isAnswerCorrect 
-                                    ? "bg-emerald-500/20 border-emerald-500 text-emerald-400" 
-                                    : showResult && isSelected 
-                                    ? "bg-rose-500/20 border-rose-500 text-rose-400" 
-                                    : "bg-slate-800 border-slate-700 text-slate-400"
-                                }`}>
-                                  {opt.key}
-                                </span>
-                                <span className="leading-tight pt-0.5">{opt.text}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* Quiz result messages */}
-                        {msg.userSelectedAnswer && (
-                          <div className={`p-3 rounded-sm text-[11px] flex items-start gap-2 animate-fade-in ${
-                            msg.quizCorrect 
-                              ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" 
-                              : "bg-rose-500/10 border border-rose-500/20 text-rose-400"
-                          }`}>
-                            {msg.quizCorrect ? (
-                              <>
-                                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="font-extrabold text-[12px]">Outstanding! Correct Answer.</p>
-                                  <p className="mt-0.5 text-emerald-500/90 leading-relaxed">
-                                    You've identified the key exam concept successfully! Socratic active recall works. Your daily tracker has been awarded **+2 minutes** of study progress!
-                                  </p>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="font-extrabold text-[12px]">Not quite correct, Practitioner.</p>
-                                  <p className="mt-0.5 text-rose-400/90 leading-relaxed">
-                                    Watch out for exam distractors! The correct answer was indeed <span className="font-black bg-rose-500/20 px-1 py-0.5 rounded">{msg.quizAnswer}</span>. Read the professor's breakdown above to review the analogies.
-                                  </p>
-                                </div>
-                              </>
-                            )}
-                          </div>
+                    {/* Quiz result feedback */}
+                    {msg.userSelectedAnswer && (
+                      <div className={`p-3 rounded-md text-xs flex items-start gap-2.5 animate-fade-in ${
+                        msg.quizCorrect 
+                          ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" 
+                          : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
+                      }`}>
+                        {msg.quizCorrect ? (
+                          <>
+                            <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                              <p className="font-black text-xs text-emerald-300">Spot on! Excellent retention.</p>
+                              <p className="text-[11px] text-emerald-400/90 leading-relaxed">
+                                You identified the core architectural requirement. Socratic active recall cemented! Awarded <strong className="text-white">+50 XP</strong>.
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                              <p className="font-black text-xs text-rose-300">Watch out for distractors!</p>
+                              <p className="text-[11px] text-rose-400/90 leading-relaxed">
+                                The correct answer was <span className="font-mono font-bold bg-rose-500/20 px-1 py-0.5 rounded">{msg.quizAnswer}</span>. Review the professor's explanation above to memorize this distinction.
+                              </p>
+                            </div>
+                          </>
                         )}
                       </div>
                     )}
-
                   </div>
+                )}
 
-                </div>
-              </div>
-            ))}
-
-            {isLoading && (
-              <div className="flex justify-start animate-fade-in">
-                <div className="flex gap-3 max-w-[80%]">
-                  <div className="w-8 h-8 rounded-sm flex items-center justify-center bg-[#FF9900]/10 border border-[#FF9900]/20 text-[#FF9900] shrink-0">
-                    <Bot className="w-4 h-4 text-[#FF9900] animate-pulse" />
-                  </div>
-                  <div className="bg-white border border-slate-200 text-slate-500 p-3.5 rounded-sm text-xs rounded-tl-none flex items-center gap-2 shadow-sm">
-                    <span className="font-bold text-slate-700">Professor Cloud is typing</span>
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {apiError && (
-              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-sm text-xs space-y-2 max-w-xl mx-auto flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-black uppercase tracking-wider text-rose-900 leading-none mb-1">
-                    API Execution Interrupted
-                  </h4>
-                  <p className="leading-relaxed font-semibold text-rose-700">{apiError}</p>
-                  <p className="mt-2 text-[11px] text-slate-500 leading-normal">
-                    Tip: Verify your key is active and supports standard Gemini 1.5 Pro queries. Click the "Reset Key" button in the upper right header to change it.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* BOTTOM PRESET FILTERS AND INPUT BOX */}
-          <div className="bg-white border-t border-slate-200 p-4 space-y-3.5">
-            
-            {/* Quick Presets Pills */}
-            <div className="space-y-1.5">
-              <span className="text-[9px] uppercase font-bold text-slate-400 font-mono tracking-widest flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-[#FF9900]" />
-                Select Quick Socratic Topic
-              </span>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => triggerPreset("security")}
-                  disabled={isLoading}
-                  className="px-2.5 py-1 text-[10px] font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-sm hover:border-slate-300 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  🛡️ Security Groups vs. NACLs
-                </button>
-                <button
-                  onClick={() => triggerPreset("responsibility")}
-                  disabled={isLoading}
-                  className="px-2.5 py-1 text-[10px] font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-sm hover:border-slate-300 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  ⚖️ Shared Responsibility Model
-                </button>
-                <button
-                  onClick={() => triggerPreset("support")}
-                  disabled={isLoading}
-                  className="px-2.5 py-1 text-[10px] font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-sm hover:border-slate-300 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  💰 AWS Support Tiers Decoded
-                </button>
               </div>
             </div>
-
-            {/* Input Submission Bar */}
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage(inputText);
-              }}
-              className="flex gap-2"
-            >
-              <input
-                id="professor-chat-input"
-                type="text"
-                disabled={isLoading}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask Professor Cloud anything about AWS cloud concepts..."
-                className="flex-1 px-3 py-2 border border-slate-200 text-xs rounded-sm focus:outline-none focus:ring-1 focus:ring-[#FF9900] bg-slate-50 hover:bg-slate-100/50 focus:bg-white transition-colors text-slate-800 disabled:opacity-60 font-semibold"
-              />
-              <button
-                type="submit"
-                id="professor-chat-submit-btn"
-                disabled={!inputText.trim() || isLoading}
-                className="bg-slate-900 text-white hover:bg-slate-800 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-sm shrink-0 flex items-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer"
-              >
-                Send
-                <Send className="w-3 h-3 text-amber-500" />
-              </button>
-            </form>
-
-            {/* Micro attribution footer */}
-            <div className="flex justify-between items-center text-[9px] text-slate-400 font-semibold font-mono">
-              <span className="flex items-center gap-1">
-                <Flame className="w-3 h-3 text-[#FF9900]" />
-                Interactive responses add +2m study time
-              </span>
-              <span>Model: {aiModelMode === "fast" ? "gemini-3.6-flash (Concise)" : "gemini-3.6-flash (Socratic)"}</span>
-            </div>
-
           </div>
-        </>
-      )}
+        ))}
+
+        {isLoading && (
+          <div className="flex justify-start animate-fade-in">
+            <div className="flex gap-3 max-w-[80%]">
+              <div className="w-8 h-8 rounded-md flex items-center justify-center bg-[#FF9900]/10 border border-[#FF9900]/30 text-[#FF9900] shrink-0">
+                <Bot className="w-4 h-4 text-[#FF9900] animate-pulse" />
+              </div>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 p-3.5 rounded-lg text-xs rounded-tl-none flex items-center gap-2 shadow-xs">
+                <span className="font-bold">Professor Cloud is reasoning...</span>
+                <div className="flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {apiError && (
+          <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 p-4 rounded-lg text-xs space-y-1 max-w-xl mx-auto flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold uppercase tracking-wider text-rose-900 dark:text-rose-100">
+                API Response Delayed
+              </h4>
+              <p className="leading-relaxed font-medium text-rose-700 dark:text-rose-300">{apiError}</p>
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* SWARM AGENT SUMMON BAR & PRESETS */}
+      <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 space-y-3">
+        
+        {/* Agent Swarm Summon Buttons */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[9px] uppercase font-bold text-slate-400 font-mono tracking-wider flex items-center gap-1 mr-1">
+            <Cpu className="w-3 h-3 text-[#FF9900]" />
+            Summon Agent:
+          </span>
+          <button
+            onClick={() => handleSummonAgent("Archie", "Lead Solutions Architect")}
+            disabled={isLoading}
+            className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
+          >
+            🏗️ @Archie (Architect)
+          </button>
+          <button
+            onClick={() => handleSummonAgent("Guardian", "SecOps & Compliance")}
+            disabled={isLoading}
+            className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
+          >
+            🛡️ @Guardian (SecOps)
+          </button>
+          <button
+            onClick={() => handleSummonAgent("PennyWise", "FinOps & Cost")}
+            disabled={isLoading}
+            className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+          >
+            💰 @PennyWise (FinOps)
+          </button>
+          <button
+            onClick={() => handleSummonAgent("TrapMaster", "Exam Distractors")}
+            disabled={isLoading}
+            className="px-2 py-0.5 text-[10px] font-bold rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-all cursor-pointer disabled:opacity-50"
+          >
+            ⚡ @TrapMaster (Traps)
+          </button>
+        </div>
+
+        {/* Quick Topics Shortcuts */}
+        <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
+          <button
+            onClick={() => triggerPreset("security")}
+            disabled={isLoading}
+            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
+          >
+            🛡️ Security Groups vs NACLs
+          </button>
+          <button
+            onClick={() => triggerPreset("responsibility")}
+            disabled={isLoading}
+            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
+          >
+            ⚖️ Shared Responsibility
+          </button>
+          <button
+            onClick={() => triggerPreset("whiteboard_vpc")}
+            disabled={isLoading}
+            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
+          >
+            📐 Draw 3-Tier VPC Topology
+          </button>
+          <button
+            onClick={() => triggerPreset("s3_tiers")}
+            disabled={isLoading}
+            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
+          >
+            📦 S3 Storage Class Cost Traps
+          </button>
+          <button
+            onClick={() => triggerPreset("serverless")}
+            disabled={isLoading}
+            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
+          >
+            ⚡ Serverless Event Architecture
+          </button>
+          <button
+            onClick={() => triggerPreset("kms")}
+            disabled={isLoading}
+            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
+          >
+            🔒 KMS vs CloudHSM vs Secrets Manager
+          </button>
+        </div>
+
+        {/* Input Box */}
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSendMessage(inputText);
+          }}
+          className="flex gap-2"
+        >
+          <input
+            id="professor-chat-input"
+            type="text"
+            disabled={isLoading}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder={`Ask Professor Cloud (${activeMode.toUpperCase()} mode)...`}
+            className="flex-1 px-3.5 py-2.5 border border-slate-200 dark:border-slate-700 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-[#FF9900] bg-slate-50 dark:bg-slate-950 focus:bg-white dark:focus:bg-slate-900 transition-colors text-slate-900 dark:text-slate-100 disabled:opacity-60 font-medium"
+          />
+          <button
+            type="submit"
+            id="professor-chat-submit-btn"
+            disabled={!inputText.trim() || isLoading}
+            className="bg-[#FF9900] hover:bg-amber-500 text-slate-950 px-4 py-2.5 text-xs font-black uppercase tracking-wider rounded-md shrink-0 flex items-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer shadow-sm min-h-[44px]"
+          >
+            <span>Ask</span>
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </form>
+
+      </div>
 
     </div>
   );

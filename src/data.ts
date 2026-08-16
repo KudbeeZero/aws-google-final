@@ -1675,12 +1675,122 @@ export const distractorVault: DistractorItem[] = [
   },
   {
     id: "v-7",
-    title: "AWS Trusted Advisor vs. AWS Inspector",
+    title: "AWS Trusted Advisor vs. Amazon Inspector",
     category: "Audit & Best Practice",
     serviceA: "AWS Trusted Advisor",
     serviceB: "Amazon Inspector",
     serviceAUsage: "Scans your entire account to recommend best practices in five areas: security, cost, performance, fault tolerance, and limits.",
     serviceBUsage: "Targeted vulnerability scanner specifically for Amazon EC2 instances and container images, checking for software bugs (CVEs).",
     keyTrap: "Trusted Advisor scans your *entire account architecture* against basic best practices (e.g. MFA turned off, idle databases). Inspector scans *individual software packages* running inside virtual machines."
+  },
+  {
+    id: "v-8",
+    title: "Amazon CloudWatch vs. AWS CloudTrail",
+    category: "Monitoring & Governance",
+    serviceA: "Amazon CloudWatch",
+    serviceB: "AWS CloudTrail",
+    serviceAUsage: "Performance metric monitoring, log aggregation, and automated alarm triggers (e.g., CPU > 80%, auto-scaling events).",
+    serviceBUsage: "Auditing and governance tool recording API calls, user actions, IAM access timestamps, and console sign-in history.",
+    keyTrap: "CloudWatch answers 'HOW is the system performing?' (CPU, memory, alarms). CloudTrail answers 'WHO did WHAT, and WHEN?' (API call audits, identity governance)."
+  },
+  {
+    id: "v-9",
+    title: "AWS Secrets Manager vs. AWS Systems Manager Parameter Store",
+    category: "Security & Management",
+    serviceA: "AWS Secrets Manager",
+    serviceB: "Systems Manager Parameter Store",
+    serviceAUsage: "Dedicated secret storage with automatic password rotation for databases (RDS, Aurora) and fine-grained access control.",
+    serviceBUsage: "Hierarchical key-value configuration store for license keys, database URLs, and encrypted strings without built-in automatic rotation.",
+    keyTrap: "If the scenario specifically requires AUTOMATIC PASSWORD ROTATION without custom code, choose Secrets Manager. If it just needs free/standard key-value config storage, choose Parameter Store."
+  },
+  {
+    id: "v-10",
+    title: "AWS KMS vs. AWS CloudHSM",
+    category: "Security & Cryptography",
+    serviceA: "AWS KMS (Key Management Service)",
+    serviceB: "AWS CloudHSM",
+    serviceAUsage: "Multi-tenant managed encryption service integrated across all AWS products (FIPS 140-2 Level 2 validated).",
+    serviceBUsage: "Dedicated, single-tenant hardware security module providing exclusive single-tenant cryptographic key control (FIPS 140-2 Level 3).",
+    keyTrap: "KMS is AWS-managed and shared multi-tenant hardware. CloudHSM gives dedicated hardware appliances inside your VPC for strict compliance mandates."
+  },
+  {
+    id: "v-11",
+    title: "Amazon Macie vs. Amazon GuardDuty",
+    category: "Security & Compliance",
+    serviceA: "Amazon Macie",
+    serviceB: "Amazon GuardDuty",
+    serviceAUsage: "Data privacy and security service using machine learning to discover, classify, and protect Sensitive Personal Data (PII) in Amazon S3.",
+    serviceBUsage: "Continuous threat detection monitoring AWS account security, compromised credentials, and unauthorized infrastructure activities.",
+    keyTrap: "Macie discovers and protects Sensitive Data / PII stored inside S3 buckets. GuardDuty detects malicious account activity and intrusion attempts from server logs."
+  },
+  {
+    id: "v-12",
+    title: "AWS Organizations SCP vs. IAM Permissions Boundary",
+    category: "Governance & Identity",
+    serviceA: "Service Control Policy (SCP)",
+    serviceB: "IAM Permissions Boundary",
+    serviceAUsage: "Organization-level guardrails applied to AWS Member Accounts or OUs that specify the maximum permissions for account members.",
+    serviceBUsage: "Advanced IAM feature setting the maximum permissions an individual IAM user or role can be granted by an administrator.",
+    keyTrap: "SCPs apply across AWS ACCOUNTS in an Organization hierarchy (and NEVER grant permissions, only restrict maximum boundaries). Permissions Boundaries apply to specific IAM entities inside one account."
+  },
+  {
+    id: "v-13",
+    title: "Amazon Cognito User Pools vs. Amazon Cognito Identity Pools",
+    category: "Identity & Federation",
+    serviceA: "Cognito User Pools (Authentication)",
+    serviceB: "Cognito Identity Pools (Authorization)",
+    serviceAUsage: "Provides sign-up, sign-in, MFA, and user directory management for mobile/web app users (generates JWT tokens).",
+    serviceBUsage: "Provides temporary, scoped AWS credentials allowing mobile/web users to directly access AWS resources (like S3 buckets or DynamoDB).",
+    keyTrap: "User Pools = Authentication (verifying username & password). Identity Pools = Authorization (issuing temporary AWS STS credentials to access cloud services)."
+  },
+  {
+    id: "v-14",
+    title: "Amazon Global Accelerator vs. Amazon CloudFront",
+    category: "Networking & Performance",
+    serviceA: "AWS Global Accelerator",
+    serviceB: "Amazon CloudFront",
+    serviceAUsage: "Uses AWS global edge network to route TCP/UDP packets with 2 static Anycast IP addresses to improve non-HTTP and HTTP latency.",
+    serviceBUsage: "Content Delivery Network (CDN) caching static and dynamic web content (HTML, images, video) at edge locations worldwide.",
+    keyTrap: "CloudFront CACHES web assets (Layer 7 HTTP/S) at Edge locations. Global Accelerator does NOT cache; it proxies non-HTTP (UDP/TCP) and HTTP packets over AWS global private fiber to static IPs."
+  },
+  {
+    id: "v-15",
+    title: "AWS Elastic Beanstalk vs. AWS CloudFormation",
+    category: "Deployment & Infrastructure",
+    serviceA: "AWS Elastic Beanstalk (PaaS)",
+    serviceB: "AWS CloudFormation (IaC)",
+    serviceAUsage: "Platform as a Service (PaaS) to deploy and scale web applications by just uploading source code, managing server provisioning automatically.",
+    serviceBUsage: "Infrastructure as Code (IaC) modeling and provisioning all AWS resources via declarative JSON or YAML template files.",
+    keyTrap: "Elastic Beanstalk focuses on application developers uploading code (quick PaaS web app deploy). CloudFormation is full Infrastructure as Code to provision any AWS service via YAML/JSON templates."
+  },
+  {
+    id: "v-16",
+    title: "AWS Direct Connect vs. AWS Site-to-Site VPN",
+    category: "Networking & Hybrid Cloud",
+    serviceA: "AWS Direct Connect (DX)",
+    serviceB: "AWS Site-to-Site VPN",
+    serviceAUsage: "Dedicated physical fiber-optic connection from on-premises data centers to AWS bypassing the public internet.",
+    serviceBUsage: "Encrypted IPSec tunnel established over the public internet between on-premises customer gateway and AWS Virtual Private Gateway.",
+    keyTrap: "Direct Connect is a private physical fiber line (takes weeks/months to provision, highest bandwidth, no public internet). VPN is an encrypted IPSec tunnel over the public internet (provisions in minutes)."
+  },
+  {
+    id: "v-17",
+    title: "AWS Snowball Edge vs. AWS Snowmobile",
+    category: "Data Migration",
+    serviceA: "AWS Snowball Edge",
+    serviceB: "AWS Snowmobile",
+    serviceAUsage: "Rugged physical storage and edge compute appliance (80TB or 210TB) shipped by courier for petabyte-scale data transfers.",
+    serviceBUsage: "45-foot rugged shipping container pulled by a semi-trailer truck designed to transport exabyte-scale data (up to 100PB per truck).",
+    keyTrap: "Snowball Edge is for Petabyte-scale migration (shipped via parcel). Snowmobile is for Exabyte-scale (massive truck for >10 Petabytes)."
+  },
+  {
+    id: "v-18",
+    title: "Amazon Route 53 Latency Routing vs. Geolocation Routing",
+    category: "Networking & DNS",
+    serviceA: "Latency-Based Routing",
+    serviceB: "Geolocation Routing",
+    serviceAUsage: "Directs users to the AWS Region that provides the lowest network latency based on periodic AWS network performance measurements.",
+    serviceBUsage: "Directs users to specific regional resources based on the geographic location of the DNS query origin (country, state, continent).",
+    keyTrap: "Latency routing picks the FASTEST server responding to the user. Geolocation routing maps users by their physical country/region (essential for legal compliance and localization)."
   }
 ];

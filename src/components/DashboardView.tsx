@@ -9,6 +9,7 @@ import { WeeklyStudyChart } from "./WeeklyStudyChart";
 import { MonthlyHeatmap } from "./MonthlyHeatmap";
 import { Achievements } from "./Achievements";
 import { GlobalLeaderboard } from "./GlobalLeaderboard";
+import { ReadinessMilestones, READINESS_MILESTONES } from "./ReadinessMilestones";
 import { loginWithGoogle, loginAnonymously, logoutUser, registerWithEmail, loginWithEmail, getAuthDiagnostics, FirebaseAuthError } from "../lib/firebase";
 
 const AchievementIcon: React.FC<{ name: string; unlocked: boolean }> = ({ name, unlocked }) => {
@@ -356,6 +357,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       streakCard: true,
       cloudSync: true,
       readinessScore: true,
+      readinessMilestones: true,
       learningPulse: true,
       leaderboard: true,
       dailyGoal: true,
@@ -387,6 +389,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       streakCard: true,
       cloudSync: true,
       readinessScore: true,
+      readinessMilestones: true,
       learningPulse: true,
       leaderboard: true,
       dailyGoal: true,
@@ -858,18 +861,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           
           {/* Readiness Score Circular/Hero Gauge (4 cols) */}
           {widgetVisibility.readinessScore && (
-            <div className="lg:col-span-4 bg-white border border-slate-200 p-6 rounded-sm flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden">
+            <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-sm flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden">
               <div className="absolute top-0 right-0 p-2 bg-[#FF9900]/10 text-[#FF9900] text-[9px] font-bold uppercase tracking-wider rounded-bl-sm">
                 Ready Check
               </div>
               
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+              <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">
                 Exam Readiness Score
               </h3>
 
-              <div className="relative flex items-center justify-center mb-4">
-                <div className="w-32 h-32 rounded-full border-4 border-slate-100 flex flex-col items-center justify-center relative">
-                  <span className="text-4xl font-black text-slate-800 tracking-tight">
+              <div className="relative flex items-center justify-center mb-3">
+                <div className="w-32 h-32 rounded-full border-4 border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center relative">
+                  <span className="text-4xl font-black text-slate-800 dark:text-white tracking-tight">
                     {readinessScore}%
                   </span>
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
@@ -881,11 +884,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
               </div>
 
-              <div className={`px-3 py-1 rounded-full border text-xs font-bold ${readinessColor} mb-2`}>
-                {readinessLabel}
+              {/* Current Milestone Rank Tag */}
+              <div className="flex items-center gap-2 mb-2">
+                <div className={`px-3 py-1 rounded-full border text-xs font-bold ${readinessColor}`}>
+                  {readinessLabel}
+                </div>
+                <div className="px-2.5 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-mono font-bold flex items-center gap-1">
+                  {readinessScore >= 100 ? "👑 Cloud Guru" : readinessScore >= 75 ? "🥇 Lead Specialist" : readinessScore >= 50 ? "🥈 Cloud Architect" : readinessScore >= 25 ? "🥉 Cloud Novice" : "🚀 Explorer"}
+                </div>
               </div>
 
-              <p className="text-[11px] text-slate-500 max-w-xs leading-normal mt-1">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xs leading-normal mt-1">
                 Readiness improves as you mark cards as <strong>Mastered</strong> in the flashcard deck and pass scenarios in the <strong>Exam Simulator</strong>.
               </p>
             </div>
@@ -973,6 +982,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
 
         </div>
+      )}
+
+      {/* Gamified Readiness Score Milestone Level-Up & Badges */}
+      {widgetVisibility.readinessMilestones && (
+        <ReadinessMilestones 
+          readinessScore={readinessScore} 
+          onNavigateToTab={onNavigateToTab} 
+        />
       )}
 
       {/* Daily Study Goal Progress Tracker */}
@@ -1264,6 +1281,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 { key: "streakCard", label: "Dashboard Header & Streak Badge", desc: "Top gradient banner showing exam readiness info and active study streak." },
                 { key: "cloudSync", label: "Cloud Study Sync Control Center", desc: "Firebase authentication and progress synchronization status bar." },
                 { key: "readinessScore", label: "Exam Readiness Score Gauge", desc: "Circular score gauge predicting CLF-C02 exam readiness." },
+                { key: "readinessMilestones", label: "Readiness Milestones & Level-Up Badges", desc: "Interactive progression track, rank tiers (Novice, Architect, Guru), and animated badge showcase." },
                 { key: "learningPulse", label: "Learning Pulse & Overview Stats", desc: "Flashcard mastery counters and simulator accuracy metrics." },
                 { key: "leaderboard", label: "Global Streaks Leaderboard", desc: "Real-time candidate rankings and study momentum leaderboard." },
                 { key: "dailyGoal", label: "Daily Study Goal Progress Tracker", desc: "Interactive study minute quota tracker with quick add buttons." },
@@ -1330,246 +1348,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* Daily Study Goal Progress Tracker */}
-      <DailyGoalTracker
-        dailyStudyGoal={dailyStudyGoal}
-        todayStudyMinutes={todayStudyMinutes}
-        onUpdateDailyGoal={onUpdateDailyGoal}
-        onAddStudyMinutes={onAddStudyMinutes}
-        onResetStudyMinutes={onResetStudyMinutes}
-      />
-
-      {/* Weekly Study Progress Line Chart */}
-      <WeeklyStudyChart 
-        todayStudyMinutes={todayStudyMinutes} 
-        dailyMinutesLog={dailyMinutesLog} 
-        dailyStudyGoal={dailyStudyGoal} 
-      />
-
-      {/* Monthly Heatmap View */}
-      <MonthlyHeatmap
-        dailyMinutesLog={dailyMinutesLog}
-        dailyStudyGoal={dailyStudyGoal}
-      />
-
-      {/* Dynamic Diagnostic Health Check Card */}
-      {(strongestDomain || weakestDomain) ? (
-        <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-4.5 h-4.5 text-[#FF9900]" />
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                AI Study Diagnostics & Weakness Analysis
-              </h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handlePlayVoiceSummary}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-colors border ${
-                  isPlayingVoice 
-                    ? "bg-blue-50 text-blue-600 border-blue-200 animate-pulse" 
-                    : "bg-white hover:bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-700"
-                }`}
-                title="Play Audio Summary"
-              >
-                {isPlayingVoice ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                {isPlayingVoice ? "Stop Audio" : "Voice Summary"}
-              </button>
-              <span className="text-[9px] uppercase font-mono font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">
-                Real-time Insights
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Strongest area */}
-            <div className="p-4 rounded bg-slate-50/50 border border-slate-100/60 flex flex-col justify-between space-y-3">
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider flex items-center gap-1.5">
-                  <Trophy className="w-3.5 h-3.5 fill-emerald-50" />
-                  Your Strongest Suit
-                </span>
-                {strongestDomain ? (
-                  <>
-                    <h4 className="font-extrabold text-slate-800 text-sm">
-                      {strongestDomain.name}
-                    </h4>
-                    <p className="text-[11px] text-slate-500 leading-normal">
-                      Excellent work! You have reached <strong className="text-emerald-600 font-extrabold">{strongestDomain.progress}%</strong> mastery in this domain. Keep maintaining this solid baseline.
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-[11px] text-slate-400">
-                    No domain progress recorded yet. Start studying flashcards or testing yourself to identify strengths!
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Weakest Area (Primary Blind Spot) */}
-            <div className="p-4 rounded bg-slate-50/50 border border-slate-100/60 flex flex-col justify-between space-y-3">
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase font-bold text-rose-500 tracking-wider flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 fill-rose-50" />
-                  Primary Blind Spot
-                </span>
-                {weakestDomain ? (
-                  <>
-                    <div>
-                      <h4 className="font-extrabold text-slate-800 text-sm">
-                        {weakestDomain.name} ({weakestDomain.progress}% Mastery)
-                      </h4>
-                      <p className="text-[11px] text-slate-600 leading-normal mt-1 italic">
-                        "{getWeakestDomainAdvice(weakestDomain.id)}"
-                      </p>
-                    </div>
-                    <div className="pt-1">
-                      <button
-                        onClick={() => onSelectDomainForFlashcards(weakestDomain.id)}
-                        className="px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-black uppercase tracking-wider rounded-sm transition-all cursor-pointer inline-flex items-center gap-1"
-                      >
-                        Target Study Domain
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-[11px] text-slate-500 leading-normal">
-                    Amazing! You have fully mastered (100%) all AWS domains in this training suite. You are highly ready for the AWS Cloud Practitioner exam!
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Domain Breakdown Section */}
-      <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
-          Exam Domain Breakdown & Mastery
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {domains.map((dom) => {
-            const progress = getDomainProgress(dom.id);
-            return (
-              <div 
-                key={dom.id}
-                className="bg-white border border-slate-200 p-5 rounded-sm shadow-sm hover:border-slate-300 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 font-mono">
-                        DOMAIN {dom.number}
-                      </span>
-                      <h4 className="font-bold text-slate-800 text-sm mt-0.5 leading-snug">
-                        {dom.name}
-                      </h4>
-                    </div>
-                    <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/60">
-                      {progress}% Mastery
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
-                    {dom.overviewSummary}
-                  </p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100">
-                  {/* Progress bar */}
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-3">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        progress >= 85 ? "bg-emerald-500" : progress >= 40 ? "bg-blue-500" : "bg-slate-300"
-                      }`}
-                      style={{ width: `${progress}%` }}
-                    ></div>
-                  </div>
-
-                  <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-slate-400 font-medium">
-                      Key Services: {dom.keyServices.slice(0, 4).join(", ")}...
-                    </span>
-                    <button
-                      onClick={() => onSelectDomainForFlashcards(dom.id)}
-                      className="text-blue-600 hover:text-blue-700 font-bold uppercase tracking-wider hover:underline"
-                    >
-                      Study Cards →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Technical Interview Archive Section */}
-      {interviewHistory && interviewHistory.length > 0 && (
-        <div className="pt-2">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
-            Technical Interview Archive
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {interviewHistory.slice(0, 4).map((session, i) => (
-              <div key={session.id || i} className="bg-white border border-slate-200 p-5 rounded-sm shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-400 font-mono">
-                      {new Date(session.createdAt).toLocaleDateString()}
-                    </span>
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
-                      session.scorecard?.overall_rating === "Strong Hire" ? "text-emerald-700 bg-emerald-50 border-emerald-200" :
-                      session.scorecard?.overall_rating === "Hire" ? "text-blue-700 bg-blue-50 border-blue-200" :
-                      session.scorecard?.overall_rating === "Leaning No Hire" ? "text-amber-700 bg-amber-50 border-amber-200" :
-                      "text-slate-700 bg-slate-50 border-slate-200"
-                    }`}>
-                      {session.scorecard?.overall_rating || "Evaluated"}
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-slate-800 text-sm mt-1.5 leading-snug">
-                    Scenario: {session.scenarioId || "Technical Interview"}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
-                    {session.scorecard?.feedback_summary || "No feedback summary available."}
-                  </p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-[10px] font-medium text-slate-500">
-                    <span>Technical: {session.scorecard?.metrics?.technical_accuracy}/10</span>
-                    <span>Comm: {session.scorecard?.metrics?.communication}/10</span>
-                  </div>
-                  <button 
-                    onClick={() => onNavigateToTab("interview")}
-                    className="text-[#FF9900] hover:text-orange-600 font-bold text-[10px] uppercase tracking-wider"
-                  >
-                    View Simulator
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Dynamic Badge & Milestone Achievements Section */}
-      <Achievements achievementsList={achievementsList} />
-
-      {/* Interactive Onboarding Diagnostics & Focus Companion Bento Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
-        <div className="lg:col-span-8">
-          <FirstTimeTools 
-            onNavigateToTab={onNavigateToTab} 
-            onSelectDomain={onSelectDomainForFlashcards} 
-          />
-        </div>
-        <div className="lg:col-span-4">
-          <FocusBuddy onAddMinutes={onAddStudyMinutes} />
-        </div>
-      </div>
 
     </div>
   );

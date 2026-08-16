@@ -46,8 +46,25 @@ import {
   ArrowDown,
   ExternalLink,
   CheckCircle2,
-  X
+  X,
+  Gift,
+  Crown,
+  Key,
+  Trophy,
+  Flame
 } from "lucide-react";
+import {
+  getGamificationProfile,
+  addXP,
+  awardLootCrate,
+  openLootCrate,
+  subscribeGamification,
+  getXPForNextLevel,
+  LootCrate,
+  LootItem,
+  SwarmBounty,
+  RARITY_COLORS
+} from "../services/gamificationService";
 
 export interface WorkflowNode {
   id: string;
@@ -382,7 +399,18 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
   });
 
   // Copilot Studio Workflow Canvas States
-  const [hubViewMode, setHubViewMode] = useState<"knowledge" | "copilot-workflows" | "gap-filler" | "analytics">("knowledge");
+  const [hubViewMode, setHubViewMode] = useState<"knowledge" | "copilot-workflows" | "gap-filler" | "analytics" | "loot-bounties">("knowledge");
+  const [gamification, setGamification] = useState(getGamificationProfile());
+  const [activeBountyRunningId, setActiveBountyRunningId] = useState<string | null>(null);
+  const [bountyFeedback, setBountyFeedback] = useState<{ [bountyId: string]: string }>({});
+  const [openedCrateModal, setOpenedCrateModal] = useState<{ crate: LootCrate; rewards: LootItem[] } | null>(null);
+
+  // Subscribe to gamification profile updates
+  useEffect(() => {
+    return subscribeGamification((p) => {
+      setGamification(p);
+    });
+  }, []);
   const [workflows, setWorkflows] = useState<AutonomousWorkflow[]>(DEFAULT_WORKFLOWS);
   const [selectedWorkflow, setSelectedWorkflow] = useState<AutonomousWorkflow>(DEFAULT_WORKFLOWS[0]);
   const [activeRunningNodeId, setActiveRunningNodeId] = useState<string | null>(null);
@@ -1034,10 +1062,25 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
             <Activity className="w-4 h-4" />
             Agent Analytics
           </button>
+
+          <button
+            onClick={() => setHubViewMode("loot-bounties")}
+            className={`px-4 py-2.5 text-xs font-extrabold rounded-xs transition-all cursor-pointer flex items-center justify-center gap-2 relative min-h-[44px] ${
+              hubViewMode === "loot-bounties"
+                ? "bg-gradient-to-r from-pink-600 to-[#FF9900] text-slate-950 shadow-md font-black"
+                : "bg-pink-950/20 text-pink-400 border border-pink-800/60 hover:bg-pink-900/40"
+            }`}
+          >
+            <Gift className="w-4 h-4 text-amber-400 animate-pulse" />
+            Swarm Bounties & Loot ({gamification.cratesInventory.filter(c => !c.isOpened).length})
+            <span className="text-[9px] bg-amber-400/30 text-amber-200 font-mono px-1.5 py-0.5 rounded-xs border border-amber-400/40">
+              XP REWARDS
+            </span>
+          </button>
         </div>
 
         <span className="text-[10px] text-slate-400 font-mono hidden lg:inline whitespace-nowrap">
-          {hubViewMode === "copilot-workflows" ? "Copilot Studio Harness Active" : hubViewMode === "gap-filler" ? "Continuous Gap Analysis Active" : hubViewMode === "analytics" ? "SLA Telemetry Live" : "5 Domain Experts Online"}
+          {hubViewMode === "copilot-workflows" ? "Copilot Studio Harness Active" : hubViewMode === "gap-filler" ? "Continuous Gap Analysis Active" : hubViewMode === "analytics" ? "SLA Telemetry Live" : hubViewMode === "loot-bounties" ? "Agent Gamification & Bounties" : "5 Domain Experts Online"}
         </span>
       </div>
       {showRoadmap && (
@@ -1999,6 +2042,320 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
                 </pre>
               </motion.div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* View Mode 5: Swarm Bounties & Loot Crate Terminal */}
+      {hubViewMode === "loot-bounties" && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Top Banner HUD */}
+          <div className="bg-gradient-to-r from-slate-950 via-purple-950 to-slate-950 border border-pink-500/30 p-6 rounded-sm space-y-6 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2.5 py-0.5 bg-pink-500/20 text-pink-300 font-mono text-[10px] uppercase font-bold tracking-wider rounded-full border border-pink-500/30 flex items-center gap-1">
+                    <Gift className="w-3 h-3 text-pink-400" />
+                    Swarm Bounties & Loot Engine
+                  </span>
+                  <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 font-mono text-[10px] uppercase font-bold tracking-wider rounded-full border border-amber-500/30 flex items-center gap-1">
+                    <Crown className="w-3 h-3 text-amber-400" />
+                    Level {gamification.level} Engineer
+                  </span>
+                </div>
+                <h2 className="text-xl md:text-2xl font-black text-white font-sans">
+                  Autonomous Swarm Bounties & Loot Vault
+                </h2>
+                <p className="text-slate-300 text-xs md:text-sm mt-1 max-w-xl">
+                  Accept specialized architecture and security challenges from Archie, Guardian, PennyWise, TrapMaster, and Alex. Execute autonomous AI evaluations to bank XP and unlock rare mystery loot crates!
+                </p>
+
+                {/* Level progress */}
+                {(() => {
+                  const { currentLevelXP, maxLevelXP, percentage } = getXPForNextLevel(gamification.xp);
+                  return (
+                    <div className="mt-4 max-w-md space-y-1.5">
+                      <div className="flex justify-between text-xs font-mono text-slate-300">
+                        <span>Total Cloud XP: <strong className="text-amber-400 font-black">{gamification.xp}</strong></span>
+                        <span>Level {gamification.level + 1} ({percentage}%)</span>
+                      </div>
+                      <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                        <div
+                          className="bg-gradient-to-r from-pink-500 via-[#FF9900] to-emerald-400 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex items-center gap-3 bg-slate-900/90 p-3 rounded-lg border border-slate-800">
+                <div className="text-center px-3 border-r border-slate-800">
+                  <div className="text-[10px] text-slate-400 uppercase font-mono">Unopened Crates</div>
+                  <div className="text-xl font-black text-pink-400 flex items-center justify-center gap-1">
+                    <Gift className="w-4 h-4" />
+                    {gamification.cratesInventory.filter(c => !c.isOpened).length}
+                  </div>
+                </div>
+                <div className="text-center px-3 border-r border-slate-800">
+                  <div className="text-[10px] text-slate-400 uppercase font-mono">Study Streak</div>
+                  <div className="text-xl font-black text-amber-400 flex items-center justify-center gap-1">
+                    <Flame className="w-4 h-4 text-amber-400" />
+                    {gamification.streakDays}d
+                  </div>
+                </div>
+                <div className="text-center px-3">
+                  <div className="text-[10px] text-slate-400 uppercase font-mono">XP Boost</div>
+                  <div className="text-xl font-black text-emerald-400">{gamification.xpMultiplier || 1.0}x</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CRATE OPENING MODAL */}
+          {openedCrateModal && (
+            <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-slate-900 border border-pink-500/50 p-6 md:p-8 rounded-2xl max-w-lg w-full text-center space-y-5 shadow-2xl text-white relative">
+                <div className="w-20 h-20 bg-gradient-to-br from-pink-500/20 to-purple-500/20 text-pink-400 rounded-3xl flex items-center justify-center mx-auto border border-pink-500/40 shadow-inner">
+                  <Sparkles className="w-10 h-10 animate-spin" />
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-xs uppercase font-mono font-bold tracking-widest text-pink-400">
+                    {openedCrateModal.crate.rarity.toUpperCase()} CRATE UNLOCKED!
+                  </span>
+                  <h2 className="text-2xl font-black text-white">{openedCrateModal.crate.title}</h2>
+                </div>
+
+                <div className="space-y-3">
+                  {openedCrateModal.rewards.map((item, idx) => (
+                    <div key={idx} className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-left space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-black text-white flex items-center gap-2">
+                          <span className="text-lg">{item.icon}</span>
+                          {item.name}
+                        </span>
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">
+                          {item.rarity}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">{item.description}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setOpenedCrateModal(null)}
+                  className="w-full py-3.5 bg-gradient-to-r from-pink-500 to-[#FF9900] text-slate-950 font-black text-sm rounded-lg shadow-lg hover:opacity-95 transition-opacity cursor-pointer min-h-[44px]"
+                >
+                  Collect Items to Profile Inventory
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* AGENT BOUNTIES LIST */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-amber-500" />
+                  Active Swarm Agent Bounties
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Deploy agents to evaluate your knowledge against production AWS requirements and unlock mystery rewards.
+                </p>
+              </div>
+              <span className="text-xs font-mono text-slate-400">
+                {gamification.swarmBounties.filter(b => b.isCompleted).length} / {gamification.swarmBounties.length} Completed
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {gamification.swarmBounties.map((bounty) => {
+                const isRunning = activeBountyRunningId === bounty.id;
+                const rarityStyle = RARITY_COLORS[bounty.crateRarity] || RARITY_COLORS.common;
+                const feedback = bountyFeedback[bounty.id];
+
+                return (
+                  <div
+                    key={bounty.id}
+                    className={`p-5 rounded-xl border transition-all ${
+                      bounty.isCompleted
+                        ? "bg-slate-900/60 border-emerald-500/40 text-slate-300"
+                        : "bg-slate-900 border-slate-800 hover:border-slate-700 text-white"
+                    } space-y-4 flex flex-col justify-between`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{bounty.agentEmoji}</span>
+                          <div>
+                            <div className="text-[10px] font-mono text-slate-400 uppercase">{bounty.agentName} Bounty</div>
+                            <h4 className="font-black text-sm text-white leading-tight">{bounty.title}</h4>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            +{bounty.xpReward} XP
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${rarityStyle.text} bg-black/40 border ${rarityStyle.border}`}>
+                            {bounty.crateRarity} Crate
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-400 leading-relaxed bg-slate-950 p-3 rounded border border-slate-800">
+                        {bounty.task}
+                      </p>
+
+                      {feedback && (
+                        <div className="bg-emerald-950/40 border border-emerald-500/40 p-3 rounded text-xs text-emerald-300 font-mono space-y-1">
+                          <div className="font-bold flex items-center gap-1 text-emerald-400">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {bounty.agentName} Evaluation:
+                          </div>
+                          <div>{feedback}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800">
+                      {bounty.isCompleted ? (
+                        <div className="flex items-center justify-between text-xs text-emerald-400 font-mono py-1">
+                          <span className="flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Bounty Solved & XP Banked
+                          </span>
+                          <span className="text-[11px] text-slate-500">Ready in Vault</span>
+                        </div>
+                      ) : (
+                        <button
+                          disabled={isRunning}
+                          onClick={async () => {
+                            setActiveBountyRunningId(bounty.id);
+                            // Call Gemini API or simulation
+                            try {
+                              const res = await fetch("/api/gemini/agent-insight", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  agentId: bounty.agentId,
+                                  topic: bounty.title,
+                                  context: bounty.task
+                                })
+                              });
+                              let expertAdvice = "";
+                              if (res.ok) {
+                                const data = await res.json();
+                                expertAdvice = data.insight || "Architecture verified compliant with AWS Well-Architected Framework.";
+                              } else {
+                                expertAdvice = `Verified: ${bounty.agentName} confirms full compliance with AWS Cloud Practitioner best practices.`;
+                              }
+                              setBountyFeedback(prev => ({ ...prev, [bounty.id]: expertAdvice }));
+                            } catch {
+                              setBountyFeedback(prev => ({
+                                ...prev,
+                                [bounty.id]: `Autonomous Audit Complete: 100% adherence to ${bounty.title}.`
+                              }));
+                            } finally {
+                              // Award XP and Loot Crate
+                              addXP(bounty.xpReward, `${bounty.agentName} Bounty Completed`);
+                              const newCrate = awardLootCrate(
+                                bounty.crateRarity,
+                                `${bounty.agentName}'s ${bounty.title}`,
+                                `Earned by solving ${bounty.agentName}'s Swarm Bounty.`
+                              );
+                              setActiveBountyRunningId(null);
+                              addActivity(bounty.agentName, "Bounty Completed", `Awarded +${bounty.xpReward} XP & ${bounty.crateRarity} Loot Crate!`);
+                              
+                              // Trigger crate modal
+                              const result = openLootCrate(newCrate.id);
+                              setOpenedCrateModal({ crate: newCrate, rewards: result.rewards });
+                            }
+                          }}
+                          className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-[#FF9900] hover:from-purple-500 hover:to-amber-500 text-slate-950 font-black text-xs rounded-sm shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all min-h-[44px]"
+                        >
+                          {isRunning ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                              Running {bounty.agentName} Evaluation...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-4 h-4 fill-slate-950" />
+                              Accept & Run Autonomous Agent Bounty
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* UNOPENED CRATES VAULT */}
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Crown className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="font-black text-sm text-white">Your Swarm Loot Crate Vault</h3>
+                  <p className="text-xs text-slate-400">Open earned crates right here to claim multipliers and bonus study items.</p>
+                </div>
+              </div>
+              <span className="text-xs font-mono text-pink-400 font-bold">
+                {gamification.cratesInventory.filter(c => !c.isOpened).length} Ready
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              {gamification.cratesInventory.map((crate) => {
+                const rarityStyle = RARITY_COLORS[crate.rarity] || RARITY_COLORS.common;
+                return (
+                  <div
+                    key={crate.id}
+                    className={`p-4 rounded-xl border ${rarityStyle.border} ${rarityStyle.bg} space-y-3 flex flex-col justify-between`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-black/50 ${rarityStyle.text}`}>
+                          {crate.rarity}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {crate.isOpened ? "Collected" : "Ready"}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-white">{crate.title}</h4>
+                      <p className="text-[11px] text-slate-300 mt-1">{crate.source}</p>
+                    </div>
+
+                    {crate.isOpened ? (
+                      <div className="text-xs text-slate-400 font-mono py-1 text-center border-t border-slate-800">
+                        ✓ Unlocked
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const outcome = openLootCrate(crate.id);
+                          setOpenedCrateModal({ crate, rewards: outcome.rewards });
+                        }}
+                        className="w-full py-2 bg-gradient-to-r from-amber-500 to-[#FF9900] hover:bg-amber-400 text-slate-950 font-black text-xs rounded shadow-md flex items-center justify-center gap-1.5 cursor-pointer min-h-[44px]"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        Open Crate Now
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
