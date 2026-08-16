@@ -18,6 +18,7 @@ import { AlgorandPortal } from "./components/AlgorandPortal";
 import { AgentSwarmHub } from "./components/AgentSwarmHub";
 import { VisualArchitectureLearning } from "./components/VisualArchitectureLearning";
 import { LightningRushArena } from "./components/LightningRushArena";
+import { NewAgeSlotMachine } from "./components/NewAgeSlotMachine";
 import { getOfflineHtmlString } from "./utils/offlineTemplate";
 import { 
   GraduationCap, 
@@ -51,7 +52,9 @@ import {
   Globe,
   CheckCircle2,
   ArrowRight,
-  MoreHorizontal
+  MoreHorizontal,
+  Crown,
+  Coins
 } from "lucide-react";
 import { 
   auth, 
@@ -1113,6 +1116,18 @@ export default function App() {
                 </button>
 
                 <button
+                  onClick={() => handleTabChange("slots")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
+                    activeTab === "slots"
+                      ? "bg-gradient-to-r from-amber-500 to-[#FF9900] text-slate-950 shadow-md font-black"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <Crown className="w-4 h-4 shrink-0 text-amber-500" />
+                  New Age Slot Machine
+                </button>
+
+                <button
                   onClick={() => handleTabChange("lightning-rush")}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
                     activeTab === "lightning-rush"
@@ -1387,6 +1402,10 @@ export default function App() {
             />
           )}
 
+          {activeTab === "slots" && (
+            <NewAgeSlotMachine />
+          )}
+
           {activeTab === "visual-architecture" && (
             <VisualArchitectureLearning />
           )}
@@ -1541,6 +1560,21 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 gap-2">
+              <button
+                onClick={() => handleTabChange("slots")}
+                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
+                  activeTab === "slots"
+                    ? "bg-amber-500/15 border-amber-500 text-slate-900 dark:text-white font-bold"
+                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                <Crown className="w-5 h-5 text-amber-500 shrink-0" />
+                <div>
+                  <div className="text-xs font-bold text-amber-500">New Age Slot Machine</div>
+                  <div className="text-[10px] text-slate-400">Match AWS architectural synergies & Socratic bonus jackpots</div>
+                </div>
+              </button>
+
               <button
                 onClick={() => handleTabChange("matching")}
                 className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${

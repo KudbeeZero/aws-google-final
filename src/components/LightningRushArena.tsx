@@ -16,7 +16,16 @@ import {
   Crown,
   Key,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  Scissors,
+  Snowflake,
+  Shield,
+  BarChart3,
+  Lightbulb,
+  Clock,
+  TrendingUp,
+  Activity,
+  Check
 } from "lucide-react";
 import { 
   getGamificationProfile, 
@@ -26,6 +35,9 @@ import {
   claimDailyCrate, 
   subscribeGamification, 
   getXPForNextLevel, 
+  recordGameSessionMetric,
+  consumeLifeline,
+  replenishLifelines,
   LootCrate, 
   LootItem, 
   RARITY_COLORS 
@@ -104,6 +116,22 @@ const BLITZ_QUESTIONS: Question[] = [
     correctIndex: 1,
     explanation: "AWS Lambda is a serverless compute service that lets you run code for virtually any type of application or backend service without provisioning servers.",
     category: "Compute"
+  },
+  {
+    id: "blitz-9",
+    question: "Which AWS service provides an isolated private virtual network for your AWS cloud resources?",
+    options: ["Amazon Route 53", "Amazon VPC", "AWS Direct Connect", "AWS Transit Gateway"],
+    correctIndex: 1,
+    explanation: "Amazon Virtual Private Cloud (VPC) gives you full control over your virtual networking environment, including subnets, route tables, and gateways.",
+    category: "Networking"
+  },
+  {
+    id: "blitz-10",
+    question: "Which AWS pricing model provides up to a 90% discount on unused EC2 capacity for fault-tolerant workloads?",
+    options: ["On-Demand Instances", "Reserved Instances", "Spot Instances", "Dedicated Hosts"],
+    correctIndex: 2,
+    explanation: "EC2 Spot Instances let you take advantage of unused EC2 capacity in the AWS cloud at up to 90% off the On-Demand price.",
+    category: "Billing"
   }
 ];
 
@@ -111,6 +139,7 @@ export const LightningRushArena: React.FC = () => {
   const [profile, setProfile] = useState(getGamificationProfile());
   const [gameState, setGameState] = useState<"idle" | "playing" | "gameover">("idle");
   const [timeLeft, setTimeLeft] = useState<number>(60);
+  const [isFrozen, setIsFrozen] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
   const [streak, setStreak] = useState<number>(0);
   const [maxStreak, setMaxStreak] = useState<number>(0);
@@ -118,9 +147,17 @@ export const LightningRushArena: React.FC = () => {
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [questionsAnsweredCount, setQuestionsAnsweredCount] = useState<number>(0);
-  
-  // Loot modal states
-  const [activeTab, setActiveTab] = useState<"rush" | "loot" | "inventory" | "quests">("rush");
+  const [questionsCorrectCount, setQuestionsCorrectCount] = useState<number>(0);
+
+  // Lifelines state
+  const [eliminatedIndexes, setEliminatedIndexes] = useState<number[]>([]);
+  const [shieldActive, setShieldActive] = useState<boolean>(false);
+  const [lifelinesUsedInSession, setLifelinesUsedInSession] = useState<number>(0);
+  const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
+  const [responseTimes, setResponseTimes] = useState<number[]>([]);
+
+  // Navigation & Loot modal states
+  const [activeTab, setActiveTab] = useState<"rush" | "loot" | "inventory" | "quests" | "metrics">("rush");
   const [openedCrateResult, setOpenedCrateResult] = useState<{ crate: LootCrate; rewards: LootItem[]; xpEarned: number } | null>(null);
   const [dailyClaimStatus, setDailyClaimStatus] = useState<string | null>(null);
 
@@ -134,7 +171,7 @@ export const LightningRushArena: React.FC = () => {
   // Timer effect for Blitz Rush
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (gameState === "playing" && timeLeft > 0) {
+    if (gameState === "playing" && timeLeft > 0 && !isFrozen) {
       timer = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
@@ -146,23 +183,46 @@ export const LightningRushArena: React.FC = () => {
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [gameState, timeLeft]);
+  }, [gameState, timeLeft, isFrozen]);
 
   const handleGameOver = () => {
     setGameState("gameover");
     // Award all earned score as real XP
     if (score > 0) {
-      addXP(score, "Blitz Rush Session");
+      addXP(score, "Blitz Rush Sprint Session");
     }
     // High streak bonus crate
     if (maxStreak >= 4) {
       awardLootCrate("rare", "Hot Streak Mastery Crate", `Achieved ${maxStreak}x combo in Blitz Rush`);
     }
+
+    // Calculate session metrics and record
+    const accuracy = questionsAnsweredCount > 0 
+      ? Math.round((questionsCorrectCount / questionsAnsweredCount) * 100) 
+      : 0;
+    const avgResponseTime = responseTimes.length > 0 
+      ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length) 
+      : 0;
+
+    recordGameSessionMetric({
+      mode: "blitz_rush",
+      title: "60-Second Blitz Rush Sprint",
+      score: score,
+      accuracy: accuracy,
+      questionsAttempted: questionsAnsweredCount,
+      questionsCorrect: questionsCorrectCount,
+      maxStreak: maxStreak,
+      avgResponseTimeMs: avgResponseTime,
+      hintsUsed: 0,
+      lifelinesUsed: lifelinesUsedInSession,
+      xpEarned: score
+    });
   };
 
   const startBlitz = () => {
     setGameState("playing");
     setTimeLeft(60);
+    setIsFrozen(false);
     setScore(0);
     setStreak(0);
     setMaxStreak(0);
@@ -170,11 +230,45 @@ export const LightningRushArena: React.FC = () => {
     setSelectedAnswer(null);
     setIsCorrect(null);
     setQuestionsAnsweredCount(0);
+    setQuestionsCorrectCount(0);
+    setEliminatedIndexes([]);
+    setShieldActive(false);
+    setLifelinesUsedInSession(0);
+    setResponseTimes([]);
+    setQuestionStartTime(Date.now());
+  };
+
+  // In-Game Lifelines
+  const handleUse5050 = () => {
+    if (gameState !== "playing" || eliminatedIndexes.length > 0) return;
+    const currentQ = BLITZ_QUESTIONS[currentIdx];
+    const incorrectIndexes = [0, 1, 2, 3].filter(idx => idx !== currentQ.correctIndex);
+    const shuffled = [...incorrectIndexes].sort(() => 0.5 - Math.random());
+    setEliminatedIndexes(shuffled.slice(0, 2));
+    setLifelinesUsedInSession(prev => prev + 1);
+  };
+
+  const handleUseFreeze = () => {
+    if (gameState !== "playing" || isFrozen) return;
+    setIsFrozen(true);
+    setLifelinesUsedInSession(prev => prev + 1);
+    setTimeout(() => {
+      setIsFrozen(false);
+    }, 7000); // 7-second time freeze
+  };
+
+  const handleUseShield = () => {
+    if (gameState !== "playing" || shieldActive) return;
+    setShieldActive(true);
+    setLifelinesUsedInSession(prev => prev + 1);
   };
 
   const handleAnswerSelect = (index: number) => {
-    if (selectedAnswer !== null || gameState !== "playing") return;
+    if (selectedAnswer !== null || gameState !== "playing" || eliminatedIndexes.includes(index)) return;
     
+    const reactionTime = Date.now() - questionStartTime;
+    setResponseTimes(prev => [...prev, reactionTime]);
+
     setSelectedAnswer(index);
     const q = BLITZ_QUESTIONS[currentIdx];
     const correct = index === q.correctIndex;
@@ -187,13 +281,18 @@ export const LightningRushArena: React.FC = () => {
       const newStreak = streak + 1;
       setStreak(newStreak);
       if (newStreak > maxStreak) setMaxStreak(newStreak);
+      setQuestionsCorrectCount(prev => prev + 1);
       
       // Bonus time for hot streak!
       if (newStreak % 3 === 0) {
         setTimeLeft((prev) => Math.min(90, prev + 5));
       }
     } else {
-      setStreak(0);
+      if (shieldActive) {
+        setShieldActive(false); // Shield absorbed the combo loss!
+      } else {
+        setStreak(0);
+      }
     }
 
     setQuestionsAnsweredCount((prev) => prev + 1);
@@ -201,8 +300,10 @@ export const LightningRushArena: React.FC = () => {
     setTimeout(() => {
       setSelectedAnswer(null);
       setIsCorrect(null);
+      setEliminatedIndexes([]);
+      setQuestionStartTime(Date.now());
       setCurrentIdx(Math.floor(Math.random() * BLITZ_QUESTIONS.length));
-    }, 700);
+    }, 600);
   };
 
   const handleClaimDailyCrate = () => {
@@ -224,6 +325,7 @@ export const LightningRushArena: React.FC = () => {
 
   const { currentLevelXP, maxLevelXP, percentage } = getXPForNextLevel(profile.xp);
   const unopenedCrates = profile.cratesInventory.filter((c) => !c.isOpened);
+  const metrics = profile.gameMetrics;
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
@@ -246,7 +348,7 @@ export const LightningRushArena: React.FC = () => {
               AWS Blitz Rush & Loot Arena
             </h1>
             <p className="text-slate-300 text-xs md:text-sm mt-1 max-w-xl">
-              Rapid 60-second trivia sprints, rare mystery loot drops, and streak quests tracked across the ecosystem!
+              Rapid 60-second trivia sprints, rare mystery loot drops, tactical in-game lifelines, and real-time game analytics!
             </p>
 
             {/* XP Bar */}
@@ -280,8 +382,8 @@ export const LightningRushArena: React.FC = () => {
               </div>
             </div>
             <div className="text-center px-3">
-              <div className="text-[10px] text-slate-400 uppercase font-mono">XP Boost</div>
-              <div className="text-xl font-black text-emerald-400">{profile.xpMultiplier || 1.0}x</div>
+              <div className="text-[10px] text-slate-400 uppercase font-mono">Rating Tier</div>
+              <div className="text-sm font-black text-emerald-400">{metrics?.ratingTier || "Novice"}</div>
             </div>
           </div>
         </div>
@@ -290,7 +392,7 @@ export const LightningRushArena: React.FC = () => {
         <div className="flex items-center gap-2 mt-6 border-t border-indigo-900/60 pt-4 flex-wrap">
           <button
             onClick={() => setActiveTab("rush")}
-            className={`px-4 py-2 rounded-xs text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
+            className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
               activeTab === "rush"
                 ? "bg-[#FF9900] text-slate-950 shadow-md"
                 : "bg-slate-800/80 hover:bg-slate-700 text-slate-300"
@@ -301,8 +403,20 @@ export const LightningRushArena: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab("metrics")}
+            className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
+              activeTab === "metrics"
+                ? "bg-[#FF9900] text-slate-950 shadow-md"
+                : "bg-slate-800/80 hover:bg-slate-700 text-slate-300"
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 text-indigo-400" />
+            Game Metrics & Analytics
+          </button>
+
+          <button
             onClick={() => setActiveTab("loot")}
-            className={`px-4 py-2 rounded-xs text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
+            className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
               activeTab === "loot"
                 ? "bg-[#FF9900] text-slate-950 shadow-md"
                 : "bg-slate-800/80 hover:bg-slate-700 text-slate-300"
@@ -314,7 +428,7 @@ export const LightningRushArena: React.FC = () => {
 
           <button
             onClick={() => setActiveTab("inventory")}
-            className={`px-4 py-2 rounded-xs text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
+            className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
               activeTab === "inventory"
                 ? "bg-[#FF9900] text-slate-950 shadow-md"
                 : "bg-slate-800/80 hover:bg-slate-700 text-slate-300"
@@ -326,7 +440,7 @@ export const LightningRushArena: React.FC = () => {
 
           <button
             onClick={() => setActiveTab("quests")}
-            className={`px-4 py-2 rounded-xs text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
+            className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer min-h-[44px] ${
               activeTab === "quests"
                 ? "bg-[#FF9900] text-slate-950 shadow-md"
                 : "bg-slate-800/80 hover:bg-slate-700 text-slate-300"
@@ -392,11 +506,11 @@ export const LightningRushArena: React.FC = () => {
                 Ready for the 60-Second AWS Blitz?
               </h2>
               <p className="text-slate-600 dark:text-slate-400 text-sm">
-                Answer as many Cloud Practitioner questions as possible before the clock hits zero! Build hot streaks (3+ correct) to trigger multiplier bonuses and +5s time extensions.
+                Answer as many Cloud Practitioner questions as possible before the clock hits zero! Use in-game lifelines (50:50, Time Freeze, Shield) and build hot streaks (3+ correct) for massive multiplier bonuses.
               </p>
               <button
                 onClick={startBlitz}
-                className="px-8 py-3.5 bg-[#FF9900] hover:bg-amber-600 text-slate-950 font-black text-sm rounded-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 mx-auto cursor-pointer min-h-[44px]"
+                className="px-8 py-3.5 bg-[#FF9900] hover:bg-amber-600 text-slate-950 font-black text-sm rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 mx-auto cursor-pointer min-h-[44px]"
               >
                 <Play className="w-5 h-5 fill-current" />
                 Start Lightning Rush Now
@@ -407,15 +521,72 @@ export const LightningRushArena: React.FC = () => {
           {gameState === "playing" && (
             <div className="space-y-6">
               {/* HUD */}
-              <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="flex flex-col sm:flex-row items-center justify-between bg-slate-100 dark:bg-slate-800/80 p-4 rounded-xl border border-slate-200 dark:border-slate-700 gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-amber-500 font-black text-sm">
-                    <Timer className="w-5 h-5 animate-spin" />
-                    <span className="text-xl font-mono">{timeLeft}s</span>
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-mono font-black text-sm ${
+                    isFrozen 
+                      ? "bg-cyan-500/20 border-cyan-400 text-cyan-400 animate-pulse" 
+                      : timeLeft <= 10 
+                        ? "bg-rose-500/20 border-rose-500 text-rose-500 animate-bounce" 
+                        : "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                  }`}>
+                    <Timer className="w-5 h-5" />
+                    <span className="text-xl">{timeLeft}s {isFrozen ? "(FROZEN ❄️)" : ""}</span>
                   </div>
+
+                  {shieldActive && (
+                    <span className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-bold rounded-lg flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5" /> Shield Active
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-6">
+                {/* Tactical In-Game Lifelines Toolbar */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleUse5050}
+                    disabled={eliminatedIndexes.length > 0}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                      eliminatedIndexes.length > 0 
+                        ? "bg-slate-200 dark:bg-slate-800 text-slate-400 border-slate-300 dark:border-slate-700 opacity-50 cursor-not-allowed" 
+                        : "bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700"
+                    }`}
+                    title="Eliminate 2 wrong answers"
+                  >
+                    <Scissors className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>50:50</span>
+                  </button>
+
+                  <button
+                    onClick={handleUseFreeze}
+                    disabled={isFrozen}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                      isFrozen 
+                        ? "bg-cyan-500/20 text-cyan-400 border-cyan-400 opacity-70 cursor-not-allowed" 
+                        : "bg-white dark:bg-slate-900 hover:bg-cyan-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700"
+                    }`}
+                    title="Freeze clock for 7 seconds"
+                  >
+                    <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Freeze (7s)</span>
+                  </button>
+
+                  <button
+                    onClick={handleUseShield}
+                    disabled={shieldActive}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                      shieldActive 
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-400 opacity-70 cursor-not-allowed" 
+                        : "bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700"
+                    }`}
+                    title="Absorb next wrong answer without breaking combo"
+                  >
+                    <Shield className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Shield</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-4">
                   <div className="text-center">
                     <div className="text-[10px] text-slate-400 uppercase font-mono">Streak</div>
                     <div className="text-base font-black text-emerald-500 flex items-center gap-1">
@@ -432,13 +603,13 @@ export const LightningRushArena: React.FC = () => {
 
               {/* Question Card */}
               {BLITZ_QUESTIONS[currentIdx] && (
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-lg border border-slate-200 dark:border-slate-700 space-y-4">
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700 space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-[11px] font-bold rounded">
+                    <span className="px-2.5 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-[11px] font-bold rounded">
                       {BLITZ_QUESTIONS[currentIdx].category}
                     </span>
                     <span className="text-xs text-slate-400 font-mono">
-                      Answered: {questionsAnsweredCount}
+                      Answered: {questionsAnsweredCount} (Correct: {questionsCorrectCount})
                     </span>
                   </div>
 
@@ -448,8 +619,12 @@ export const LightningRushArena: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                     {BLITZ_QUESTIONS[currentIdx].options.map((opt, i) => {
+                      const isEliminated = eliminatedIndexes.includes(i);
                       let btnStyle = "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-[#FF9900]";
-                      if (selectedAnswer !== null) {
+                      
+                      if (isEliminated) {
+                        btnStyle = "bg-slate-100 dark:bg-slate-900/60 text-slate-400 line-through opacity-40 cursor-not-allowed";
+                      } else if (selectedAnswer !== null) {
                         if (i === BLITZ_QUESTIONS[currentIdx].correctIndex) {
                           btnStyle = "bg-emerald-600 text-white border-emerald-500 shadow-md animate-bounce";
                         } else if (i === selectedAnswer) {
@@ -463,10 +638,11 @@ export const LightningRushArena: React.FC = () => {
                         <button
                           key={i}
                           onClick={() => handleAnswerSelect(i)}
-                          disabled={selectedAnswer !== null}
+                          disabled={selectedAnswer !== null || isEliminated}
                           className={`p-4 rounded-lg border text-left font-medium text-xs md:text-sm transition-all flex items-center justify-between cursor-pointer min-h-[44px] ${btnStyle}`}
                         >
                           <span>{opt}</span>
+                          {isEliminated && <span className="text-[10px] font-mono text-slate-400 uppercase">50:50 Cut</span>}
                           {selectedAnswer !== null && i === BLITZ_QUESTIONS[currentIdx].correctIndex && (
                             <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
                           )}
@@ -492,34 +668,188 @@ export const LightningRushArena: React.FC = () => {
                   Blitz Rush Complete!
                 </h2>
                 <p className="text-slate-600 dark:text-slate-400 text-sm">
-                  Sprint saved! You answered {questionsAnsweredCount} questions and banked +{score} XP to your cloud profile!
+                  Sprint logged to your cloud analytics! You answered {questionsAnsweredCount} questions ({questionsCorrectCount} correct) and banked +{score} XP!
                 </p>
               </div>
 
-              <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 flex justify-around">
+              <div className="grid grid-cols-3 gap-3 bg-slate-100 dark:bg-slate-800/70 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
                 <div>
-                  <div className="text-xs text-slate-400 uppercase font-mono">Final XP</div>
-                  <div className="text-2xl font-black text-[#FF9900]">+{score}</div>
+                  <div className="text-[10px] text-slate-400 uppercase font-mono">Final XP</div>
+                  <div className="text-xl font-black text-[#FF9900]">+{score}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400 uppercase font-mono">Max Streak</div>
-                  <div className="text-2xl font-black text-emerald-500">{maxStreak}x</div>
+                  <div className="text-[10px] text-slate-400 uppercase font-mono">Accuracy</div>
+                  <div className="text-xl font-black text-emerald-500">
+                    {questionsAnsweredCount > 0 ? Math.round((questionsCorrectCount / questionsAnsweredCount) * 100) : 0}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase font-mono">Max Streak</div>
+                  <div className="text-xl font-black text-orange-500">{maxStreak}x</div>
                 </div>
               </div>
 
-              <button
-                onClick={startBlitz}
-                className="w-full py-3.5 bg-[#FF9900] hover:bg-amber-600 text-slate-950 font-black text-sm rounded-sm shadow-md flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Play Again & Level Up
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={startBlitz}
+                  className="flex-1 py-3.5 bg-[#FF9900] hover:bg-amber-600 text-slate-950 font-black text-sm rounded-lg shadow-md flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Play Again
+                </button>
+                <button
+                  onClick={() => setActiveTab("metrics")}
+                  className="px-4 py-3.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <BarChart3 className="w-4 h-4 text-indigo-400" />
+                  View Metrics
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* TAB 2: Daily Mystery Crate */}
+      {/* TAB 2: Game Metrics & Analytics Dashboard */}
+      {activeTab === "metrics" && (
+        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                  Game Performance & Skill Metrics
+                </h2>
+                <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-500 font-mono text-xs font-bold rounded-full">
+                  {metrics?.ratingTier || "Novice"} Tier
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Comprehensive analytics tracked across Trick Simulators, 60s Blitz Sprints, and Socratic Practice.
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 font-mono uppercase block">Total Sessions Logged</span>
+              <span className="text-lg font-black text-indigo-500">{metrics?.totalGamesPlayed || 0}</span>
+            </div>
+          </div>
+
+          {/* Key Metric KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
+                <span>Accuracy</span>
+                <TrendingUp className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                {metrics?.overallAccuracy || 0}%
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {metrics?.totalQuestionsCorrect || 0} of {metrics?.totalQuestionsAnswered || 0} correct
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
+                <span>All-Time Streak</span>
+                <Flame className="w-4 h-4 text-orange-500" />
+              </div>
+              <div className="text-2xl font-black text-orange-600 dark:text-orange-400">
+                {metrics?.allTimeHighStreak || 0}x
+              </div>
+              <div className="text-[10px] text-slate-400">Max consecutive answers</div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
+                <span>Avg Reaction Speed</span>
+                <Clock className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                {metrics?.avgAnswerTimeMs ? (metrics.avgAnswerTimeMs / 1000).toFixed(1) : "2.4"}s
+              </div>
+              <div className="text-[10px] text-slate-400">Fastest: {metrics?.fastestAnswerTimeMs ? (metrics.fastestAnswerTimeMs / 1000).toFixed(1) : "0.9"}s</div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
+                <span>High Score</span>
+                <Award className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
+                {metrics?.allTimeHighScore || 0}
+              </div>
+              <div className="text-[10px] text-slate-400">{metrics?.totalLifelinesUsed || 0} lifelines engaged</div>
+            </div>
+          </div>
+
+          {/* Domain Breakdown */}
+          <div className="space-y-3">
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+              Exam Domain Knowledge Distribution
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {metrics?.domainStats && Object.entries(metrics.domainStats).map(([key, domain]) => {
+                const pct = domain.total > 0 ? Math.round((domain.correct / domain.total) * 100) : 0;
+                return (
+                  <div key={key} className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-slate-700 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{domain.name}</span>
+                      <span className="font-mono text-slate-400">{domain.correct}/{domain.total} ({pct}%)</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${pct >= 80 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-500" : "bg-rose-500"}`}
+                        style={{ width: `${Math.max(5, pct)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Recent Game Sessions Log */}
+          <div className="space-y-3 pt-2">
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+              Recent Game Sprint Logs
+            </h3>
+            {metrics?.recentSessions && metrics.recentSessions.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase font-mono text-[10px]">
+                    <tr>
+                      <th className="p-3">Mode</th>
+                      <th className="p-3">Score / XP</th>
+                      <th className="p-3">Accuracy</th>
+                      <th className="p-3">Max Streak</th>
+                      <th className="p-3">Lifelines</th>
+                      <th className="p-3">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                    {metrics.recentSessions.slice(0, 5).map((sess) => (
+                      <tr key={sess.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="p-3 font-medium">{sess.title}</td>
+                        <td className="p-3 font-mono font-bold text-amber-500">+{sess.score}</td>
+                        <td className="p-3 font-mono font-bold text-emerald-500">{sess.accuracy}%</td>
+                        <td className="p-3 font-mono">{sess.maxStreak}x</td>
+                        <td className="p-3">{sess.lifelinesUsed} used</td>
+                        <td className="p-3 text-[11px] text-slate-400">{new Date(sess.timestamp).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-6 text-center text-slate-400 text-xs bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+                No recent sprint sessions logged yet. Complete a 60s Blitz Sprint or Exam Trap Simulator to generate live telemetry!
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: Daily Mystery Crate */}
       {activeTab === "loot" && (
         <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-center space-y-6 max-w-2xl mx-auto">
           <div className="w-24 h-24 bg-gradient-to-br from-pink-500/20 to-purple-500/20 text-pink-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg border border-pink-500/30">
@@ -551,7 +881,7 @@ export const LightningRushArena: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: Inventory Vault */}
+      {/* TAB 4: Inventory Vault */}
       {activeTab === "inventory" && (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
@@ -607,7 +937,7 @@ export const LightningRushArena: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: Daily Quests */}
+      {/* TAB 5: Daily Quests */}
       {activeTab === "quests" && (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">

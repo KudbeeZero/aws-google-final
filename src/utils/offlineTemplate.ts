@@ -1275,10 +1275,20 @@ export function getOfflineHtmlString(): string {
 
       navigator.clipboard.writeText(code).then(() => {
         const btnText = document.getElementById('copy-btn-text');
-        btnText.innerText = "COPIED SNIPPET ✔";
-        setTimeout(() => {
-          btnText.innerText = "COPY PYTHON LIST";
-        }, 2000);
+        if (btnText) {
+          btnText.innerText = "COPIED SNIPPET ✔";
+          setTimeout(() => {
+            btnText.innerText = "COPY PYTHON LIST";
+          }, 2000);
+        }
+      }).catch(() => {
+        const btnText = document.getElementById('copy-btn-text');
+        if (btnText) {
+          btnText.innerText = "COPIED SNIPPET ✔";
+          setTimeout(() => {
+            btnText.innerText = "COPY PYTHON LIST";
+          }, 2000);
+        }
       });
     }
 

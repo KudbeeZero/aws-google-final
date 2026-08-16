@@ -1,6 +1,12 @@
 import React, { useMemo } from "react";
 import { motion } from "motion/react";
-import { Award, CheckCircle, Flame, ShieldAlert, Sparkles, BookOpen, Layers, Trophy, AlertTriangle, TrendingUp, ShieldCheck, Bot, HelpCircle, Zap, Lock, Cloud, CloudLightning, Key, UserCheck, RefreshCw, Volume2, VolumeX, ExternalLink, Mail, SlidersHorizontal, Check, X } from "lucide-react";
+import { 
+  Award, CheckCircle, Flame, ShieldAlert, Sparkles, BookOpen, Layers, Trophy, 
+  AlertTriangle, TrendingUp, ShieldCheck, Bot, HelpCircle, Zap, Lock, Cloud, 
+  CloudLightning, Key, UserCheck, RefreshCw, Volume2, VolumeX, ExternalLink, 
+  Mail, SlidersHorizontal, Check, X, Compass, Cpu, FileQuestion, Briefcase, 
+  Coins, Database, Server, Puzzle, ArrowRight, Gamepad2, Vault, Crown
+} from "lucide-react";
 import { DomainData, Flashcard, Achievement } from "../types";
 import { FirstTimeTools } from "./FirstTimeTools";
 import { FocusBuddy } from "./FocusBuddy";
@@ -358,6 +364,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       cloudSync: true,
       readinessScore: true,
       readinessMilestones: true,
+      quickHub: true,
       learningPulse: true,
       leaderboard: true,
       dailyGoal: true,
@@ -390,6 +397,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       cloudSync: true,
       readinessScore: true,
       readinessMilestones: true,
+      quickHub: true,
       learningPulse: true,
       leaderboard: true,
       dailyGoal: true,
@@ -992,6 +1000,161 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         />
       )}
 
+      {/* Quick Study Stations & Fast Hub Matrix */}
+      {widgetVisibility.quickHub && (
+        <div id="quick-study-stations-hub" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm shadow-sm p-5 sm:p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-[#FF9900]/10 text-[#FF9900] rounded-xs shrink-0 dark:bg-[#FF9900]/5">
+                <Compass className="w-5 h-5 text-[#FF9900]" />
+              </div>
+              <div>
+                <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                  AWS Exam Study Stations & Fast Hub
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Quick access to all 11 core training consoles, simulations, AI reasoning tutors, and Web3 credentials.
+                </p>
+              </div>
+            </div>
+            <span className="text-[9px] font-mono font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-2.5 py-1 rounded border border-slate-200/60 dark:border-slate-700 self-start sm:self-auto">
+              12 Modules Ready
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pt-1">
+            {[
+              {
+                id: "slots",
+                title: "New Age Slot Machine",
+                desc: "Spin AWS reels, match architecture blueprints & solve Socratic multiplier jackpots",
+                icon: Crown,
+                color: "text-amber-500 bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700",
+                badge: "Neo-Casino XP",
+              },
+              {
+                id: "flashcards",
+                title: "Concept Flashcards",
+                desc: "100+ CLF-C02 core capabilities, active recall & domain filters",
+                icon: Layers,
+                color: "text-blue-500 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800",
+                badge: "Active Recall",
+              },
+              {
+                id: "professor",
+                title: "Socratic Professor",
+                desc: "Voice-narrated AI reasoning coach powered by ElevenLabs & Gemini",
+                icon: Bot,
+                color: "text-[#FF9900] bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800",
+                badge: "Voice + AI",
+              },
+              {
+                id: "simulator",
+                title: "Exam Trap Simulator",
+                desc: "High-yield scenario questions with community traps & voting stats",
+                icon: HelpCircle,
+                color: "text-rose-500 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800",
+                badge: "Practice Exam",
+              },
+              {
+                id: "vault",
+                title: "The Distractor Vault",
+                desc: "Deconstruct confusing AWS service pairs (WAF vs Shield, KMS vs CloudHSM)",
+                icon: Vault,
+                color: "text-purple-500 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800",
+                badge: "Trap Defense",
+              },
+              {
+                id: "visual-architecture",
+                title: "Visual Architecture Studio",
+                desc: "Interactive 3-Tier VPC, Serverless & CloudFront CDN topologies",
+                icon: Server,
+                color: "text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800",
+                badge: "Blueprints",
+              },
+              {
+                id: "lightning-rush",
+                title: "Lightning Rush Trivia",
+                desc: "60-second rapid-fire speed sprint with streak multipliers & loot crates",
+                icon: Zap,
+                color: "text-amber-500 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800",
+                badge: "60s Sprint",
+              },
+              {
+                id: "matching",
+                title: "Scenario Matcher",
+                desc: "Drag & match real-world business scenarios to AWS services",
+                icon: Puzzle,
+                color: "text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800",
+                badge: "Mini-Game",
+              },
+              {
+                id: "interview",
+                title: "HONE Technical Interview",
+                desc: "Realistic Cloud Architect defense interview simulator with scorecard",
+                icon: Briefcase,
+                color: "text-cyan-500 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800",
+                badge: "Interview Prep",
+              },
+              {
+                id: "agents",
+                title: "AI Agent Swarm Hub",
+                desc: "Autonomous architect council (Archie, Guardian, PennyWise, Alex)",
+                icon: Cpu,
+                color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800",
+                badge: "Autonomous",
+              },
+              {
+                id: "algorand",
+                title: "Algorand Web3 Portal",
+                desc: "Mint ASA verifiable blockchain credentials & AlgoKit CLI terminal",
+                icon: Coins,
+                color: "text-teal-500 bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800",
+                badge: "Web3 ASA",
+              },
+              {
+                id: "backup",
+                title: "Storage & Backup Hub",
+                desc: "Cloud sync, JSON data exports, and offline recovery diagnostics",
+                icon: Database,
+                color: "text-slate-600 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700",
+                badge: "Persistence",
+              },
+            ].map((station) => {
+              const IconComp = station.icon;
+              return (
+                <div
+                  key={station.id}
+                  onClick={() => onNavigateToTab(station.id)}
+                  className="group relative p-3.5 rounded-sm border border-slate-200 dark:border-slate-800 hover:border-[#FF9900] dark:hover:border-[#FF9900] bg-white dark:bg-slate-950 hover:bg-orange-50/20 dark:hover:bg-orange-950/10 transition-all cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-xs"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className={`p-1.5 rounded-xs border ${station.color}`}>
+                        <IconComp className="w-4 h-4" />
+                      </div>
+                      <span className="text-[8px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {station.badge}
+                      </span>
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-[#FF9900] dark:group-hover:text-[#FF9900] transition-colors leading-tight">
+                      {station.title}
+                    </h4>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug line-clamp-2">
+                      {station.desc}
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] font-bold text-[#FF9900]">
+                    <span>Launch Station</span>
+                    <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Daily Study Goal Progress Tracker */}
       {widgetVisibility.dailyGoal && (
         <DailyGoalTracker
@@ -1022,28 +1185,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Dynamic Diagnostic Health Check Card */}
       {widgetVisibility.diagnostics && (strongestDomain || weakestDomain) ? (
-        <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm shadow-sm p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4.5 h-4.5 text-[#FF9900]" />
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+              <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest">
                 AI Study Diagnostics & Weakness Analysis
               </h3>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePlayVoiceSummary}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-colors border ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-colors border cursor-pointer ${
                   isPlayingVoice 
-                    ? "bg-blue-50 text-blue-600 border-blue-200 animate-pulse" 
-                    : "bg-white hover:bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-700"
+                    ? "bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 animate-pulse" 
+                    : "bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-slate-700 dark:hover:text-white"
                 }`}
                 title="Play Audio Summary"
               >
                 {isPlayingVoice ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                 {isPlayingVoice ? "Stop Audio" : "Voice Summary"}
               </button>
-              <span className="text-[9px] uppercase font-mono font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">
+              <span className="text-[9px] uppercase font-mono font-bold text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700 px-2 py-0.5 rounded">
                 Real-time Insights
               </span>
             </div>
@@ -1051,23 +1214,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Strongest area */}
-            <div className="p-4 rounded bg-slate-50/50 border border-slate-100/60 flex flex-col justify-between space-y-3">
+            <div className="p-4 rounded bg-slate-50/50 dark:bg-slate-800/40 border border-slate-100/60 dark:border-slate-800 flex flex-col justify-between space-y-3">
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider flex items-center gap-1.5">
-                  <Trophy className="w-3.5 h-3.5 fill-emerald-50" />
+                <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wider flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5 fill-emerald-50 dark:fill-emerald-950" />
                   Your Strongest Suit
                 </span>
                 {strongestDomain ? (
                   <>
-                    <h4 className="font-extrabold text-slate-800 text-sm">
+                    <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-sm">
                       {strongestDomain.name}
                     </h4>
-                    <p className="text-[11px] text-slate-500 leading-normal">
-                      Excellent work! You have reached <strong className="text-emerald-600 font-extrabold">{strongestDomain.progress}%</strong> mastery in this domain. Keep maintaining this solid baseline.
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+                      Excellent work! You have reached <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold">{strongestDomain.progress}%</strong> mastery in this domain. Keep maintaining this solid baseline.
                     </p>
                   </>
                 ) : (
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
                     No domain progress recorded yet. Start studying flashcards or testing yourself to identify strengths!
                   </p>
                 )}
@@ -1075,33 +1238,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             {/* Weakest Area (Primary Blind Spot) */}
-            <div className="p-4 rounded bg-slate-50/50 border border-slate-100/60 flex flex-col justify-between space-y-3">
+            <div className="p-4 rounded bg-slate-50/50 dark:bg-slate-800/40 border border-slate-100/60 dark:border-slate-800 flex flex-col justify-between space-y-3">
               <div className="space-y-2">
-                <span className="text-[10px] uppercase font-bold text-rose-500 tracking-wider flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 fill-rose-50" />
+                <span className="text-[10px] uppercase font-bold text-rose-500 dark:text-rose-400 tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 fill-rose-50 dark:fill-rose-950" />
                   Primary Blind Spot
                 </span>
                 {weakestDomain ? (
                   <>
                     <div>
-                      <h4 className="font-extrabold text-slate-800 text-sm">
+                      <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-sm">
                         {weakestDomain.name} ({weakestDomain.progress}% Mastery)
                       </h4>
-                      <p className="text-[11px] text-slate-600 leading-normal mt-1 italic">
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-normal mt-1 italic">
                         "{getWeakestDomainAdvice(weakestDomain.id)}"
                       </p>
                     </div>
                     <div className="pt-1">
                       <button
                         onClick={() => onSelectDomainForFlashcards(weakestDomain.id)}
-                        className="px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-black uppercase tracking-wider rounded-sm transition-all cursor-pointer inline-flex items-center gap-1"
+                        className="px-3 py-1.5 bg-slate-900 dark:bg-slate-800 text-white hover:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-black uppercase tracking-wider rounded-sm transition-all cursor-pointer inline-flex items-center gap-1 border dark:border-slate-700"
                       >
                         Target Study Domain
                       </button>
                     </div>
                   </>
                 ) : (
-                  <p className="text-[11px] text-slate-500 leading-normal">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
                     Amazing! You have fully mastered (100%) all AWS domains in this training suite. You are highly ready for the AWS Cloud Practitioner exam!
                   </p>
                 )}
@@ -1114,7 +1277,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Domain Breakdown Section */}
       {widgetVisibility.domainBreakdown && (
         <div>
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+          <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">
             Exam Domain Breakdown & Mastery
           </h3>
 
@@ -1124,46 +1287,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               return (
                 <div 
                   key={dom.id}
-                  className="bg-white border border-slate-200 p-5 rounded-sm shadow-sm hover:border-slate-300 transition-all flex flex-col justify-between"
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-sm shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-start justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-400 font-mono">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 font-mono">
                           DOMAIN {dom.number}
                         </span>
-                        <h4 className="font-bold text-slate-800 text-sm mt-0.5 leading-snug">
+                        <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm mt-0.5 leading-snug">
                           {dom.name}
                         </h4>
                       </div>
-                      <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/60">
+                      <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-100/60 dark:border-blue-800/60">
                         {progress}% Mastery
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-2 leading-relaxed">
                       {dom.overviewSummary}
                     </p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100">
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                     {/* Progress bar */}
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-3">
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden mb-3">
                       <div 
                         className={`h-full rounded-full transition-all duration-500 ${
-                          progress >= 85 ? "bg-emerald-500" : progress >= 40 ? "bg-blue-500" : "bg-slate-300"
+                          progress >= 85 ? "bg-emerald-500" : progress >= 40 ? "bg-blue-500" : "bg-slate-300 dark:bg-slate-700"
                         }`}
                         style={{ width: `${progress}%` }}
                       ></div>
                     </div>
 
                     <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-slate-400 font-medium">
+                      <span className="text-slate-400 dark:text-slate-500 font-medium">
                         Key Services: {dom.keyServices.slice(0, 4).join(", ")}...
                       </span>
                       <button
                         onClick={() => onSelectDomainForFlashcards(dom.id)}
-                        className="text-blue-600 hover:text-blue-700 font-bold uppercase tracking-wider hover:underline"
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold uppercase tracking-wider hover:underline cursor-pointer"
                       >
                         Study Cards →
                       </button>
@@ -1179,41 +1342,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Technical Interview Archive Section */}
       {widgetVisibility.interviewArchive && interviewHistory && interviewHistory.length > 0 && (
         <div className="pt-2">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+          <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">
             Technical Interview Archive
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {interviewHistory.slice(0, 4).map((session, i) => (
-              <div key={session.id || i} className="bg-white border border-slate-200 p-5 rounded-sm shadow-sm flex flex-col justify-between">
+              <div key={session.id || i} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-sm shadow-sm flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-400 font-mono">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 font-mono">
                       {new Date(session.createdAt).toLocaleDateString()}
                     </span>
                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
-                      session.scorecard?.overall_rating === "Strong Hire" ? "text-emerald-700 bg-emerald-50 border-emerald-200" :
-                      session.scorecard?.overall_rating === "Hire" ? "text-blue-700 bg-blue-50 border-blue-200" :
-                      session.scorecard?.overall_rating === "Leaning No Hire" ? "text-amber-700 bg-amber-50 border-amber-200" :
-                      "text-slate-700 bg-slate-50 border-slate-200"
+                      session.scorecard?.overall_rating === "Strong Hire" ? "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800" :
+                      session.scorecard?.overall_rating === "Hire" ? "text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800" :
+                      session.scorecard?.overall_rating === "Leaning No Hire" ? "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800" :
+                      "text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                     }`}>
                       {session.scorecard?.overall_rating || "Evaluated"}
                     </span>
                   </div>
-                  <h4 className="font-bold text-slate-800 text-sm mt-1.5 leading-snug">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm mt-1.5 leading-snug">
                     Scenario: {session.scenarioId || "Technical Interview"}
                   </h4>
-                  <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-2 leading-relaxed">
                     {session.scorecard?.feedback_summary || "No feedback summary available."}
                   </p>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-[10px] font-medium text-slate-500">
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-[10px] font-medium text-slate-500 dark:text-slate-400">
                     <span>Technical: {session.scorecard?.metrics?.technical_accuracy}/10</span>
                     <span>Comm: {session.scorecard?.metrics?.communication}/10</span>
                   </div>
                   <button 
                     onClick={() => onNavigateToTab("interview")}
-                    className="text-[#FF9900] hover:text-orange-600 font-bold text-[10px] uppercase tracking-wider"
+                    className="text-[#FF9900] hover:text-orange-600 font-bold text-[10px] uppercase tracking-wider cursor-pointer"
                   >
                     View Simulator
                   </button>
@@ -1282,6 +1445,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 { key: "cloudSync", label: "Cloud Study Sync Control Center", desc: "Firebase authentication and progress synchronization status bar." },
                 { key: "readinessScore", label: "Exam Readiness Score Gauge", desc: "Circular score gauge predicting CLF-C02 exam readiness." },
                 { key: "readinessMilestones", label: "Readiness Milestones & Level-Up Badges", desc: "Interactive progression track, rank tiers (Novice, Architect, Guru), and animated badge showcase." },
+                { key: "quickHub", label: "Study Stations & Fast Hub Matrix", desc: "Interactive launchpad with 1-click access to all 11 AWS learning and simulation modules." },
                 { key: "learningPulse", label: "Learning Pulse & Overview Stats", desc: "Flashcard mastery counters and simulator accuracy metrics." },
                 { key: "leaderboard", label: "Global Streaks Leaderboard", desc: "Real-time candidate rankings and study momentum leaderboard." },
                 { key: "dailyGoal", label: "Daily Study Goal Progress Tracker", desc: "Interactive study minute quota tracker with quick add buttons." },

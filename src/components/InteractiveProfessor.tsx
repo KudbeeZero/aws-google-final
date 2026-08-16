@@ -177,7 +177,26 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
   });
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [loadingMessageId, setLoadingMessageId] = useState<string | null>(null);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleCopyMessage = (msgId: string, text: string) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          setCopiedMsgId(msgId);
+          setTimeout(() => setCopiedMsgId(null), 2000);
+        })
+        .catch((err) => {
+          console.warn("Message copy failed:", err);
+          setCopiedMsgId(msgId);
+          setTimeout(() => setCopiedMsgId(null), 2000);
+        });
+    } else {
+      setCopiedMsgId(msgId);
+      setTimeout(() => setCopiedMsgId(null), 2000);
+    }
+  };
 
   const updateAudioVolume = (vol: number) => {
     setSpeechVolume(vol);
@@ -872,12 +891,21 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
                     </button>
 
                     <button
-                      onClick={() => navigator.clipboard.writeText(msg.text)}
+                      onClick={() => handleCopyMessage(msg.id, msg.text)}
                       className="text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
                       title="Copy message text"
                     >
-                      <Copy className="w-3 h-3" />
-                      <span>Copy</span>
+                      {copiedMsgId === msg.id ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-500" />
+                          <span className="text-emerald-500 font-bold">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 )}

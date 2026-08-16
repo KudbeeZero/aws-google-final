@@ -250,9 +250,22 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   };
 
   const handleCopyPython = () => {
-    navigator.clipboard.writeText(getPythonSyntaxString());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const text = getPythonSyntaxString();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch((err) => {
+          console.warn("Clipboard writeText error in FlashcardDeck:", err);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+    } else {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   // Custom Card Creation

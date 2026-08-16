@@ -4,14 +4,15 @@ import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
-// Catch unhandled promise rejections globally
+// Catch and gracefully handle unhandled promise rejections globally
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled Promise Rejection:', event.reason);
-  // We don't necessarily want to crash the app, but logging it prevents silent failures
+  console.warn('Handled Promise Rejection:', event.reason);
+  // Prevent browser default uncaught error reporting to avoid disruptive crash banners
+  event.preventDefault();
 });
 
 window.addEventListener('error', (event) => {
-  console.error('Global Error Caught:', event.error || event.message);
+  console.warn('Handled Window Error:', event.error || event.message);
 });
 
 createRoot(document.getElementById('root')!).render(

@@ -104,9 +104,19 @@ export const TheDistractorVault: React.FC<TheDistractorVaultProps> = ({
   const handleCopyTrap = (item: DistractorItem, e: React.MouseEvent) => {
     e.stopPropagation();
     const textToCopy = `📌 AWS Exam Distractor: ${item.title}\n• Option A (${item.serviceA}): ${item.serviceAUsage}\n• Option B (${item.serviceB}): ${item.serviceBUsage}\n⚠️ Exam Trap: ${item.keyTrap}`;
-    navigator.clipboard?.writeText(textToCopy);
-    setCopiedId(item.id);
-    setTimeout(() => setCopiedId(null), 2000);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy)
+        .then(() => {
+          setCopiedId(item.id);
+          setTimeout(() => setCopiedId(null), 2000);
+        })
+        .catch((err) => {
+          console.warn("Clipboard copy failed:", err);
+        });
+    } else {
+      setCopiedId(item.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
   };
 
   // Get unique categories for filtering

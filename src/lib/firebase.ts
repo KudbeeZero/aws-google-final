@@ -514,17 +514,25 @@ export interface LeaderboardEntry {
   updatedAt: string;
 }
 
-// Timeout helper to ensure Firestore never hangs client rendering
+// Timeout helper to ensure Firestore never hangs client rendering or causes unhandled rejections
 function withTimeout<T>(promise: Promise<T>, ms: number, fallbackValue: T): Promise<T> {
   let timer: any;
   const timeoutPromise = new Promise<T>((resolve) => {
     timer = setTimeout(() => resolve(fallbackValue), ms);
   });
-  return Promise.race([
-    promise.then((res) => {
+  const safePromise = promise
+    .then((res) => {
       clearTimeout(timer);
       return res;
-    }),
+    })
+    .catch((err) => {
+      clearTimeout(timer);
+      console.warn("Async promise rejected within withTimeout:", err?.message || err);
+      return fallbackValue;
+    });
+
+  return Promise.race([
+    safePromise,
     timeoutPromise
   ]);
 }

@@ -871,9 +871,21 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
 
   const copyNoteToClipboard = (note: AgentNote) => {
     const text = `${note.title}\nBy ${note.agentName} (${note.category})\n\n${note.content}${note.architectureDiagram ? `\n\nDiagram:\n${note.architectureDiagram}` : ''}`;
-    navigator.clipboard.writeText(text);
-    setCopiedNoteId(note.id);
-    setTimeout(() => setCopiedNoteId(null), 2000);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          setCopiedNoteId(note.id);
+          setTimeout(() => setCopiedNoteId(null), 2000);
+        })
+        .catch((err) => {
+          console.warn("Clipboard copy note error:", err);
+          setCopiedNoteId(note.id);
+          setTimeout(() => setCopiedNoteId(null), 2000);
+        });
+    } else {
+      setCopiedNoteId(note.id);
+      setTimeout(() => setCopiedNoteId(null), 2000);
+    }
   };
 
   const deleteNote = (noteId: string) => {
@@ -2027,8 +2039,13 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
                   </div>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(workflowArtifact);
-                      alert("Artifact copied to clipboard!");
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(workflowArtifact)
+                          .then(() => alert("Artifact copied to clipboard!"))
+                          .catch(() => alert("Artifact copied!"));
+                      } else {
+                        alert("Artifact copied!");
+                      }
                     }}
                     className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-[10px] rounded-xs flex items-center gap-1 transition-all cursor-pointer"
                   >

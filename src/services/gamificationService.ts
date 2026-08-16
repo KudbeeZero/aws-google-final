@@ -35,6 +35,43 @@ export interface SwarmBounty {
   completedAt?: string;
 }
 
+export interface GameSessionMetric {
+  id: string;
+  mode: "blitz_rush" | "trap_simulator" | "scenario_match" | "distractor_defense" | "new_age_slots";
+  title: string;
+  timestamp: string;
+  score: number;
+  accuracy: number; // percentage (0-100)
+  questionsAttempted: number;
+  questionsCorrect: number;
+  maxStreak: number;
+  avgResponseTimeMs: number;
+  hintsUsed: number;
+  lifelinesUsed: number;
+  xpEarned: number;
+  domainBreakdown?: Record<string, { attempted: number; correct: number }>;
+}
+
+export interface ExtendedGameMetrics {
+  totalGamesPlayed: number;
+  totalQuestionsAnswered: number;
+  totalQuestionsCorrect: number;
+  overallAccuracy: number;
+  allTimeHighStreak: number;
+  allTimeHighScore: number;
+  fastestAnswerTimeMs: number;
+  avgAnswerTimeMs: number;
+  totalHintsUsed: number;
+  totalLifelinesUsed: number;
+  freezeLifelinesCount: number;
+  fiftyFiftyCount: number;
+  agentWhisperCount: number;
+  streakShieldCount: number;
+  domainStats: Record<string, { correct: number; total: number; name: string }>;
+  recentSessions: GameSessionMetric[];
+  ratingTier: "Novice" | "Apprentice" | "Specialist" | "Master" | "Cloud Grandmaster";
+}
+
 export interface GamificationProfile {
   xp: number;
   level: number;
@@ -49,6 +86,8 @@ export interface GamificationProfile {
   lastDailyClaimDate?: string;
   completedBountyIds: string[];
   swarmBounties: SwarmBounty[];
+  // Enhanced Game Metrics and Lifelines state
+  gameMetrics?: ExtendedGameMetrics;
 }
 
 const STORAGE_KEY = "aws_gamification_v2";
@@ -135,6 +174,62 @@ export const getXPForNextLevel = (xp: number): { currentLevelXP: number; maxLeve
   return { currentLevelXP, maxLevelXP, percentage };
 };
 
+export const DEFAULT_GAME_METRICS: ExtendedGameMetrics = {
+  totalGamesPlayed: 6,
+  totalQuestionsAnswered: 48,
+  totalQuestionsCorrect: 41,
+  overallAccuracy: 85,
+  allTimeHighStreak: 8,
+  allTimeHighScore: 2450,
+  fastestAnswerTimeMs: 1420,
+  avgAnswerTimeMs: 3200,
+  totalHintsUsed: 5,
+  totalLifelinesUsed: 3,
+  freezeLifelinesCount: 2,
+  fiftyFiftyCount: 3,
+  agentWhisperCount: 2,
+  streakShieldCount: 1,
+  domainStats: {
+    "cloud-concepts": { correct: 12, total: 14, name: "Cloud Concepts (24%)" },
+    "security-compliance": { correct: 11, total: 13, name: "Security & Compliance (30%)" },
+    "cloud-technology": { correct: 10, total: 12, name: "Cloud Technology & Services (34%)" },
+    "billing-pricing": { correct: 8, total: 9, name: "Billing, Pricing & Support (12%)" }
+  },
+  recentSessions: [
+    {
+      id: "sess-init-1",
+      mode: "blitz_rush",
+      title: "Blitz Rush 60s Sprint",
+      timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+      score: 1800,
+      accuracy: 88,
+      questionsAttempted: 8,
+      questionsCorrect: 7,
+      maxStreak: 6,
+      avgResponseTimeMs: 2800,
+      hintsUsed: 1,
+      lifelinesUsed: 1,
+      xpEarned: 350
+    },
+    {
+      id: "sess-init-2",
+      mode: "trap_simulator",
+      title: "Exam Trap & Distractor Run",
+      timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
+      score: 1400,
+      accuracy: 83,
+      questionsAttempted: 6,
+      questionsCorrect: 5,
+      maxStreak: 4,
+      avgResponseTimeMs: 4100,
+      hintsUsed: 2,
+      lifelinesUsed: 1,
+      xpEarned: 250
+    }
+  ],
+  ratingTier: "Specialist"
+};
+
 const DEFAULT_PROFILE: GamificationProfile = {
   xp: 350,
   level: 1,
@@ -155,7 +250,8 @@ const DEFAULT_PROFILE: GamificationProfile = {
   totalCheckpointsAnswered: 4,
   totalCheckpointsCorrect: 3,
   completedBountyIds: [],
-  swarmBounties: DEFAULT_SWARM_BOUNTIES
+  swarmBounties: DEFAULT_SWARM_BOUNTIES,
+  gameMetrics: DEFAULT_GAME_METRICS
 };
 
 // Event emitter subscribers
@@ -188,6 +284,7 @@ export const getGamificationProfile = (): GamificationProfile => {
       ...DEFAULT_PROFILE,
       ...parsed,
       swarmBounties: parsed.swarmBounties && parsed.swarmBounties.length > 0 ? parsed.swarmBounties : DEFAULT_SWARM_BOUNTIES,
+      gameMetrics: parsed.gameMetrics ? { ...DEFAULT_GAME_METRICS, ...parsed.gameMetrics } : DEFAULT_GAME_METRICS,
       level: calculateLevel(parsed.xp || DEFAULT_PROFILE.xp)
     };
   } catch {
@@ -368,3 +465,120 @@ export const recordProfessorCheckpoint = (isCorrect: boolean): { xpEarned: numbe
   addXP(xpEarned, isCorrect ? "Socratic Checkpoint Victory" : "Socratic Practice Attempt");
   return { xpEarned, crateDropped };
 };
+
+// Calculate user rating tier based on overall accuracy and high streak
+export const calculateRatingTier = (accuracy: number, gamesPlayed: number, maxStreak: number): ExtendedGameMetrics["ratingTier"] => {
+  if (gamesPlayed >= 15 && accuracy >= 90 && maxStreak >= 10) return "Cloud Grandmaster";
+  if (gamesPlayed >= 10 && accuracy >= 85 && maxStreak >= 7) return "Master";
+  if (gamesPlayed >= 5 && accuracy >= 75) return "Specialist";
+  if (gamesPlayed >= 2) return "Apprentice";
+  return "Novice";
+};
+
+// Record comprehensive game session metrics
+export const recordGameSessionMetric = (
+  sessionData: Omit<GameSessionMetric, "id" | "timestamp">
+): { updatedMetrics: ExtendedGameMetrics; profile: GamificationProfile } => {
+  const profile = getGamificationProfile();
+  const metrics: ExtendedGameMetrics = profile.gameMetrics || { ...DEFAULT_GAME_METRICS };
+
+  const session: GameSessionMetric = {
+    ...sessionData,
+    id: `sess-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    timestamp: new Date().toISOString()
+  };
+
+  // Update aggregated game metrics
+  metrics.totalGamesPlayed += 1;
+  metrics.totalQuestionsAnswered += session.questionsAttempted;
+  metrics.totalQuestionsCorrect += session.questionsCorrect;
+  metrics.overallAccuracy = Math.round((metrics.totalQuestionsCorrect / Math.max(1, metrics.totalQuestionsAnswered)) * 100);
+  metrics.allTimeHighStreak = Math.max(metrics.allTimeHighStreak, session.maxStreak);
+  metrics.allTimeHighScore = Math.max(metrics.allTimeHighScore, session.score);
+  
+  if (session.avgResponseTimeMs > 0) {
+    if (metrics.avgAnswerTimeMs === 0) {
+      metrics.avgAnswerTimeMs = session.avgResponseTimeMs;
+    } else {
+      metrics.avgAnswerTimeMs = Math.round((metrics.avgAnswerTimeMs + session.avgResponseTimeMs) / 2);
+    }
+  }
+
+  if (session.avgResponseTimeMs > 0 && (metrics.fastestAnswerTimeMs === 0 || session.avgResponseTimeMs < metrics.fastestAnswerTimeMs)) {
+    metrics.fastestAnswerTimeMs = session.avgResponseTimeMs;
+  }
+
+  metrics.totalHintsUsed += session.hintsUsed;
+  metrics.totalLifelinesUsed += session.lifelinesUsed;
+
+  // Merge domain breakdowns if available
+  if (session.domainBreakdown) {
+    Object.entries(session.domainBreakdown).forEach(([domainKey, data]) => {
+      if (metrics.domainStats[domainKey]) {
+        metrics.domainStats[domainKey].correct += data.correct;
+        metrics.domainStats[domainKey].total += data.attempted;
+      }
+    });
+  }
+
+  // Prepend session to recent history (keep up to 20)
+  metrics.recentSessions = [session, ...(metrics.recentSessions || [])].slice(0, 20);
+  metrics.ratingTier = calculateRatingTier(metrics.overallAccuracy, metrics.totalGamesPlayed, metrics.allTimeHighStreak);
+
+  profile.gameMetrics = metrics;
+  saveGamificationProfile(profile);
+
+  return { updatedMetrics: metrics, profile };
+};
+
+// Lifeline consumption
+export const consumeLifeline = (
+  type: "freeze" | "fiftyFifty" | "agentWhisper" | "streakShield"
+): { success: boolean; remaining: number } => {
+  const profile = getGamificationProfile();
+  const metrics = profile.gameMetrics || { ...DEFAULT_GAME_METRICS };
+
+  let currentCount = 0;
+  if (type === "freeze") currentCount = metrics.freezeLifelinesCount || 0;
+  else if (type === "fiftyFifty") currentCount = metrics.fiftyFiftyCount || 0;
+  else if (type === "agentWhisper") currentCount = metrics.agentWhisperCount || 0;
+  else if (type === "streakShield") currentCount = metrics.streakShieldCount || 0;
+
+  if (currentCount <= 0) {
+    return { success: false, remaining: 0 };
+  }
+
+  if (type === "freeze") metrics.freezeLifelinesCount = currentCount - 1;
+  else if (type === "fiftyFifty") metrics.fiftyFiftyCount = currentCount - 1;
+  else if (type === "agentWhisper") metrics.agentWhisperCount = currentCount - 1;
+  else if (type === "streakShield") metrics.streakShieldCount = currentCount - 1;
+
+  metrics.totalLifelinesUsed += 1;
+  profile.gameMetrics = metrics;
+  saveGamificationProfile(profile);
+
+  return { success: true, remaining: currentCount - 1 };
+};
+
+// Lifeline replenishment
+export const replenishLifelines = (
+  type: "freeze" | "fiftyFifty" | "agentWhisper" | "streakShield",
+  count: number = 1
+): number => {
+  const profile = getGamificationProfile();
+  const metrics = profile.gameMetrics || { ...DEFAULT_GAME_METRICS };
+
+  if (type === "freeze") metrics.freezeLifelinesCount = (metrics.freezeLifelinesCount || 0) + count;
+  else if (type === "fiftyFifty") metrics.fiftyFiftyCount = (metrics.fiftyFiftyCount || 0) + count;
+  else if (type === "agentWhisper") metrics.agentWhisperCount = (metrics.agentWhisperCount || 0) + count;
+  else if (type === "streakShield") metrics.streakShieldCount = (metrics.streakShieldCount || 0) + count;
+
+  profile.gameMetrics = metrics;
+  saveGamificationProfile(profile);
+
+  return type === "freeze" ? metrics.freezeLifelinesCount
+    : type === "fiftyFifty" ? metrics.fiftyFiftyCount
+    : type === "agentWhisper" ? metrics.agentWhisperCount
+    : metrics.streakShieldCount;
+};
+
