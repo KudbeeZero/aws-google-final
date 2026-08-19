@@ -40,6 +40,7 @@ import {
   Rotate3d
 } from "lucide-react";
 import { SlotMachine3D } from "./SlotMachine3D";
+import { CloudArchitectureQuickFire } from "./CloudArchitectureQuickFire";
 import { 
   addXP, 
   awardLootCrate, 
@@ -489,6 +490,7 @@ export const NewAgeSlotMachine: React.FC = () => {
   // Crate Drop Notification
   const [awardedCrate, setAwardedCrate] = useState<LootCrate | null>(null);
   const [showWinCelebration, setShowWinCelebration] = useState<boolean>(false);
+  const [isBonusActive, setIsBonusActive] = useState<boolean>(false);
 
   // Gamification Profile & Sync
   const [profileXP, setProfileXP] = useState<number>(() => getGamificationProfile().xp);
@@ -752,6 +754,10 @@ export const NewAgeSlotMachine: React.FC = () => {
 
     setWinningLines(hitLines);
     setMatchedBlueprint(detectedBlueprint);
+
+    if (scatterCount >= 3) {
+      setIsBonusActive(true);
+    }
 
     // Update Fever Energy
     if (!isFeverActive) {
@@ -1953,6 +1959,20 @@ export const NewAgeSlotMachine: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Cloud Architecture Quick-Fire Bonus Round */}
+      <AnimatePresence>
+        {isBonusActive && (
+          <CloudArchitectureQuickFire 
+            onComplete={(winAmount) => {
+              setCredits(prev => prev + winAmount);
+              setLastWinAmount(winAmount);
+              setIsBonusActive(false);
+            }}
+            onClose={() => setIsBonusActive(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Paytable Modal */}
       {showPaytableModal && (
