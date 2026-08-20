@@ -19,6 +19,8 @@ import { AgentSwarmHub } from "./components/AgentSwarmHub";
 import { VisualArchitectureLearning } from "./components/VisualArchitectureLearning";
 import { LightningRushArena } from "./components/LightningRushArena";
 import { NewAgeSlotMachine } from "./components/NewAgeSlotMachine";
+import { calculateComprehensiveReadiness, ExamConfidenceReport } from "./services/readinessService";
+import { ExamPassingConfidenceModal } from "./components/ExamPassingConfidenceModal";
 import { getOfflineHtmlString } from "./utils/offlineTemplate";
 import { 
   GraduationCap, 
@@ -75,6 +77,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [showQuickStartGuide, setShowQuickStartGuide] = useState<boolean>(false);
   const [showDeployGuide, setShowDeployGuide] = useState<boolean>(false);
+  const [showExamConfidenceModal, setShowExamConfidenceModal] = useState<boolean>(false);
   const [quickStartStep, setQuickStartStep] = useState<number>(1);
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState<boolean>(false);
   const mainRef = React.useRef<HTMLElement>(null);
@@ -662,17 +665,20 @@ export default function App() {
     setActiveTab("flashcards");
   };
 
-  // Dynamic readiness metric calculation
+  // Comprehensive Exam Readiness Calculation using official domain weights & multi-tool metrics
   const totalCards = initialFlashcards.length;
   const knownCards = Object.values(studyHistory).filter((v) => v === "known").length;
   const correctQuizzes = Object.values(quizHistory).filter((v) => v === true).length;
-  const readinessScore = Math.min(
-    100,
-    Math.round(
-      (knownCards / (totalCards || 1)) * 50 + 
-      (correctQuizzes / (trickQuestions.length || 1)) * 50
-    )
+
+  const readinessReport: ExamConfidenceReport = calculateComprehensiveReadiness(
+    initialFlashcards,
+    studyHistory,
+    trickQuestions,
+    quizHistory,
+    totalStudyMinutes,
+    streak
   );
+  const readinessScore = readinessReport.readinessScore;
 
   return (
     <div className={`bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen w-full flex flex-col overflow-hidden font-sans ${darkMode ? "dark" : ""}`}>
@@ -705,15 +711,19 @@ export default function App() {
 
         {/* Global Progress Indicators */}
         <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0 min-w-0">
-          <div className="flex flex-col items-end shrink-0">
-            <span className="text-[8px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold leading-none hidden sm:block">
-              Ready Score
+          <button 
+            onClick={() => setShowExamConfidenceModal(true)}
+            className="flex flex-col items-end shrink-0 hover:opacity-80 transition-opacity cursor-pointer text-right group"
+            title="Click to Open Exam Passing Confidence Hub"
+          >
+            <span className="text-[8px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold leading-none hidden sm:block group-hover:text-amber-500 transition-colors">
+              Ready Score 📊
             </span>
-            <span className="text-[10px] sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5" title="Readiness Score">
+            <span className="text-[10px] sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
               <span className="sm:hidden text-slate-400 text-[8px] font-bold">RDY:</span> {readinessScore}% 
               <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${readinessScore >= 80 ? 'bg-emerald-500' : readinessScore >= 40 ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
             </span>
-          </div>
+          </button>
           
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 hidden xs:block"></div>
 
@@ -1365,6 +1375,7 @@ export default function App() {
               redirectSuggestedAction={redirectSuggestedAction}
               redirectErrorGuide={redirectErrorGuide}
               interviewHistory={interviewHistory}
+              onOpenExamConfidenceModal={() => setShowExamConfidenceModal(true)}
             />
           )}
 
@@ -1918,6 +1929,14 @@ export default function App() {
           </span>
         </div>
       </footer>
+
+      {/* Official Exam Passing Confidence Modal */}
+      <ExamPassingConfidenceModal
+        report={readinessReport}
+        isOpen={showExamConfidenceModal}
+        onClose={() => setShowExamConfidenceModal(false)}
+        onNavigateToTab={setActiveTab}
+      />
     </div>
   );
 }

@@ -56,6 +56,7 @@ interface DashboardViewProps {
   redirectSuggestedAction?: string | null;
   redirectErrorGuide?: string | null;
   interviewHistory?: any[];
+  onOpenExamConfidenceModal?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -81,6 +82,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   redirectSuggestedAction,
   redirectErrorGuide,
   interviewHistory = [],
+  onOpenExamConfidenceModal,
 }) => {
   // Calculate statistics
   const totalCards = flashcards.length;
@@ -994,10 +996,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Gamified Readiness Score Milestone Level-Up & Badges */}
       {widgetVisibility.readinessMilestones && (
-        <ReadinessMilestones 
-          readinessScore={readinessScore} 
-          onNavigateToTab={onNavigateToTab} 
-        />
+        <div className="space-y-3">
+          <div className="flex justify-between items-center px-1">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                Official Exam Readiness & Milestone Ladder
+              </span>
+            </div>
+            {onOpenExamConfidenceModal && (
+              <button
+                onClick={onOpenExamConfidenceModal}
+                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-sm shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> View Confidence Hub
+              </button>
+            )}
+          </div>
+          <ReadinessMilestones 
+            readinessScore={readinessScore} 
+            onNavigateToTab={onNavigateToTab} 
+          />
+        </div>
       )}
 
       {/* Quick Study Stations & Fast Hub Matrix */}

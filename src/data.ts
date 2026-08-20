@@ -64,12 +64,14 @@ export const domainsData: DomainData[] = [
 ];
 
 export const initialFlashcards: Flashcard[] = [
-  // Domain 1: Cloud Concepts
+  // =========================================================================
+  // DOMAIN 1: CLOUD CONCEPTS (24% OF EXAM)
+  // =========================================================================
   {
     id: "fc-1",
     domainId: "cloud-concepts",
     question: "Who is responsible for the physical security of AWS data centers?",
-    answer: "AWS. This falls under Security 'OF' the Cloud, which includes hardware, physical facilities, hypervisors, and core networking."
+    answer: "AWS. This falls under Security 'OF' the Cloud, which includes hardware, physical data center facilities, host hypervisors, and core networking."
   },
   {
     id: "fc-2",
@@ -81,133 +83,253 @@ export const initialFlashcards: Flashcard[] = [
     id: "fc-3",
     domainId: "cloud-concepts",
     question: "What is 'elasticity' in cloud computing, and how does it differ from 'scalability'?",
-    answer: "Scalability is the structural capacity to handle growth. Elasticity is the automatic matching of resource supply to real-time demand dynamically (scaling down when traffic drops to avoid waste)."
+    answer: "Scalability is the structural capacity to handle growing workloads. Elasticity is the automatic, real-time matching of resource supply to fluctuating demand (scaling down when traffic drops to eliminate cost waste)."
   },
   {
     id: "fc-4",
     domainId: "cloud-concepts",
     question: "What is the primary financial advantage of shifting from Capex to Opex in AWS?",
-    answer: "Instead of paying upfront capital costs for physical data centers before using them (Capex), you pay only for what you consume dynamically (Opex), improving liquidity."
+    answer: "Instead of paying huge upfront capital expenditures (Capex) for physical data centers before using them, you pay low variable operating costs (Opex) only for what you consume dynamically."
   },
   {
     id: "fc-4b",
     domainId: "cloud-concepts",
     question: "What are the 6 Pillars of the AWS Well-Architected Framework?",
-    answer: "1. Operational Excellence\n2. Security\n3. Reliability\n4. Performance Efficiency\n5. Cost Optimization\n6. Sustainability"
+    answer: "1. Operational Excellence (run & monitor systems)\n2. Security (protect info & assets)\n3. Reliability (recover from disruptions)\n4. Performance Efficiency (use compute resources efficiently)\n5. Cost Optimization (avoid unnecessary spend)\n6. Sustainability (minimize environmental impact)"
   },
   {
     id: "fc-4c",
     domainId: "cloud-concepts",
-    question: "What consists of two or more isolated data centers in a specific geographical area connected via low-latency links?",
+    question: "What consists of two or more isolated data centers in a specific geographical area connected via redundant low-latency fiber links?",
     answer: "An AWS Availability Zone (AZ). Multiple AZs form an AWS Region for fault isolation and high availability."
   },
   {
     id: "fc-4d",
     domainId: "cloud-concepts",
-    question: "Which AWS global infrastructure component delivers cached content closer to end users?",
-    answer: "Edge Locations (points of presence used by Amazon CloudFront CDN and AWS Global Accelerator)."
+    question: "Which AWS global infrastructure component delivers cached content closer to end users globally?",
+    answer: "Edge Locations (Points of Presence - PoP) used by Amazon CloudFront CDN and AWS Global Accelerator to reduce network latency."
+  },
+  {
+    id: "fc-4e",
+    domainId: "cloud-concepts",
+    question: "What are the 4 main Disaster Recovery (DR) strategies on AWS, ranked from lowest cost/highest RTO to highest cost/lowest RTO?",
+    answer: "1. Backup & Restore (Hours RTO/RPO, lowest cost)\n2. Pilot Light (Core data mirrored, instances created on disaster, tens of minutes)\n3. Warm Standby (Scaled-down minimal fleet running 24/7, minutes)\n4. Multi-Site Active/Active (Full production in 2+ regions, real-time zero downtime, highest cost)"
+  },
+  {
+    id: "fc-4f",
+    domainId: "cloud-concepts",
+    question: "What is the AWS Cloud Adoption Framework (AWS CAF) and what are its 6 Perspectives?",
+    answer: "AWS CAF provides guidance to accelerate cloud transformation. It organizes capabilities into 6 Perspectives:\n• Business Capabilities: Business, People, Governance\n• Technical Capabilities: Platform, Security, Operations"
+  },
+  {
+    id: "fc-4g",
+    domainId: "cloud-concepts",
+    question: "What is the difference between AWS Outposts, AWS Local Zones, and AWS Wavelength?",
+    answer: "• AWS Outposts: Extends native AWS infrastructure and services directly onto your physical on-premises data center.\n• AWS Local Zones: Places AWS compute/storage close to large population centers for single-digit millisecond latency.\n• AWS Wavelength: Deploys AWS services directly inside 5G telecommunication networks for ultra-low latency mobile edge apps."
+  },
+  {
+    id: "fc-4h",
+    domainId: "cloud-concepts",
+    question: "What is High Availability (HA) versus Fault Tolerance (FT)?",
+    answer: "• High Availability (HA): System remains accessible with minimal downtime (e.g. 99.99%) through automatic failover.\n• Fault Tolerance (FT): Zero downtime and zero performance degradation even when a component completely fails (via total redundancy, higher cost)."
+  },
+  {
+    id: "fc-4i",
+    domainId: "cloud-concepts",
+    question: "What are Regional Edge Caches in Amazon CloudFront?",
+    answer: "Regional Edge Caches sit between CloudFront Edge Locations and your origin server. They have larger cache capacity to hold content longer and prevent redundant requests to origin servers."
   },
 
-  // Domain 2: Security & Compliance
+  // =========================================================================
+  // DOMAIN 2: SECURITY & COMPLIANCE (30% OF EXAM)
+  // =========================================================================
   {
     id: "fc-5",
     domainId: "security-compliance",
-    question: "Which AWS service provides on-demand downloads of official compliance reports and agreements?",
+    question: "Which AWS service provides on-demand downloads of official compliance reports (SOC, PCI-DSS, ISO) and legal agreements?",
     answer: "AWS Artifact. It is the central, self-service repository for legal and compliance-related AWS audit documents."
   },
   {
     id: "fc-6",
     domainId: "security-compliance",
     question: "What is the primary difference between AWS WAF and AWS Shield?",
-    answer: "AWS WAF filters web traffic to protect against application exploits (Layer 7 like SQLi/XSS). AWS Shield protects against massive DDoS attacks at network/transport layers (Layers 3 & 4)."
+    answer: "• AWS WAF: Web Application Firewall filtering Layer 7 HTTP/HTTPS traffic (blocks SQLi, XSS, rate-limiting IP floods).\n• AWS Shield: DDoS protection at Layers 3 & 4 (SYN floods, UDP reflection). Standard is automatic & free; Advanced adds 24/7 SRT and financial cost spike protection."
   },
   {
     id: "fc-7",
     domainId: "security-compliance",
-    question: "What is the best practice for giving an application running on an EC2 instance access to an S3 bucket?",
-    answer: "Attach an IAM Role to the EC2 instance instead of embedding hardcoded AWS Access Keys inside the application code."
+    question: "What is the security best practice for giving an application running on an EC2 instance access to an S3 bucket?",
+    answer: "Attach an IAM Role with temporary credentials (STS) to the EC2 instance profile, rather than hardcoding static AWS Access Keys inside the code."
   },
   {
     id: "fc-8",
     domainId: "security-compliance",
     question: "How does Amazon GuardDuty differ from Amazon Inspector?",
-    answer: "GuardDuty is a continuous threat detection service analyzing VPC, DNS, and CloudTrail logs. Inspector is an automated vulnerability scanner checking EC2 and ECR container images for software CVEs."
+    answer: "• Amazon GuardDuty: Intelligent threat detection analyzing VPC Flow Logs, DNS logs, and CloudTrail management events using ML to spot compromised accounts.\n• Amazon Inspector: Automated vulnerability scanner checking EC2 instances and ECR container images for software vulnerabilities (CVEs) and unintended network exposure."
   },
   {
     id: "fc-8b",
     domainId: "security-compliance",
     question: "Which AWS service uses machine learning to automatically discover, classify, and protect sensitive data (PII) in S3?",
-    answer: "Amazon Macie. It scans S3 buckets for personally identifiable information (PII), API keys, and unencrypted sensitive data."
+    answer: "Amazon Macie. It scans S3 buckets for personally identifiable information (PII, SSNs, credit card numbers) and unencrypted sensitive data."
   },
   {
     id: "fc-8c",
     domainId: "security-compliance",
     question: "What is the difference between Security Groups and Network ACLs (NACLs)?",
-    answer: "Security Groups act at the EC2 instance level and are STATEFUL (return traffic allowed automatically). Network ACLs act at the VPC Subnet level and are STATELESS (inbound & outbound rules evaluated explicitly)."
+    answer: "• Security Groups: Operate at the EC2 Instance level. STATEFUL (return traffic automatically allowed). Support ALLOW rules only.\n• Network ACLs (NACLs): Operate at the Subnet boundary. STATELESS (inbound & outbound evaluated separately). Support both ALLOW and DENY numbered rules."
   },
   {
     id: "fc-8d",
     domainId: "security-compliance",
     question: "What service allows central management of permissions across multiple AWS accounts using Service Control Policies (SCPs)?",
-    answer: "AWS Organizations. SCPs enforce max available permission guardrails across member accounts."
+    answer: "AWS Organizations. SCPs act as guardrails that specify the MAXIMUM allowed permissions for member accounts and Organizational Units (OUs)."
+  },
+  {
+    id: "fc-8e",
+    domainId: "security-compliance",
+    question: "What is the difference between AWS Secrets Manager and AWS Systems Manager Parameter Store?",
+    answer: "• AWS Secrets Manager: Specifically designed for secrets (database passwords, API keys) with AUTOMATED rotation integration for RDS/Redshift/DocumentDB.\n• SSM Parameter Store: General hierarchical configuration and secret storage with KMS encryption; does NOT offer native automatic rotation."
+  },
+  {
+    id: "fc-8f",
+    domainId: "security-compliance",
+    question: "What is the difference between AWS KMS and AWS CloudHSM?",
+    answer: "• AWS KMS (Key Management Service): Managed, multi-tenant cryptographic key service integrated across 100+ AWS services.\n• AWS CloudHSM: Dedicated, single-tenant hardware security module instance under exclusive customer control (FIPS 140-2 Level 3 compliance)."
+  },
+  {
+    id: "fc-8g",
+    domainId: "security-compliance",
+    question: "What does AWS Security Hub do?",
+    answer: "AWS Security Hub is a central cloud security posture management (CSPM) dashboard that aggregates, organizes, and prioritizes security alerts and compliance checks from GuardDuty, Inspector, Macie, and IAM Access Analyzer."
+  },
+  {
+    id: "fc-8h",
+    domainId: "security-compliance",
+    question: "What is the difference between AWS CloudTrail and AWS Config?",
+    answer: "• AWS CloudTrail: Records WHO did WHAT and WHEN (API call logging, user actions, governance auditing).\n• AWS Config: Records WHAT resources LOOK LIKE over time (configuration history, relationship tracking, compliance rule evaluation against desired state)."
+  },
+  {
+    id: "fc-8i",
+    domainId: "security-compliance",
+    question: "Can customers perform penetration testing on AWS services without prior approval?",
+    answer: "Yes, for 8 core customer-managed services without prior notification: EC2, NAT Gateways, ELB, CloudFront, Aurora, API Gateway, Lambda, and Lightsail. (DDoS simulation still requires prior authorization)."
+  },
+  {
+    id: "fc-8j",
+    domainId: "security-compliance",
+    question: "What are the essential best practices for the AWS Account Root User?",
+    answer: "1. Lock away the root user credentials.\n2. Delete all root access keys (do not generate API keys for root).\n3. Enable multi-factor authentication (MFA) immediately.\n4. Never use root for daily administrative tasks; create IAM admin users instead."
   },
 
-  // Domain 3: Cloud Technology & Services
+  // =========================================================================
+  // DOMAIN 3: CLOUD TECHNOLOGY & SERVICES (34% OF EXAM)
+  // =========================================================================
   {
     id: "fc-9",
     domainId: "cloud-technology",
     question: "When should you use Amazon EFS over Amazon EBS?",
-    answer: "Use EFS when you need a shared network file system that can be mounted concurrently by hundreds of EC2 instances. EBS is a block storage volume attached to a single instance."
+    answer: "Use EFS (Elastic File System) when you need a shared POSIX network file system mounted concurrently by hundreds of EC2 instances across multiple AZs. EBS (Elastic Block Store) is a block volume attached to a single EC2 instance within one AZ."
   },
   {
     id: "fc-10",
     domainId: "cloud-technology",
     question: "What does it mean that AWS Lambda is 'serverless'?",
-    answer: "AWS manages server provision, OS patching, and auto-scales compute capacity. You only pay for active execution duration in milliseconds with zero pay for idle."
+    answer: "AWS handles all server provisioning, OS patching, fleet management, and dynamic auto-scaling. You write code, configure an event trigger, and pay only for active compute execution duration in milliseconds (zero cost for idle)."
   },
   {
     id: "fc-10b",
     domainId: "cloud-technology",
-    question: "Which Amazon S3 storage class offers low cost for infrequently accessed data requiring millisecond retrieval?",
-    answer: "S3 Standard-Infrequent Access (S3 Standard-IA). For long-term archiving without instant retrieval needs, use S3 Glacier Flexible or Glacier Deep Archive."
+    question: "Which Amazon S3 storage class automatically moves objects between access tiers to optimize costs without retrieval fees?",
+    answer: "S3 Intelligent-Tiering. It monitors access patterns and automatically shifts objects between Frequent, Infrequent, Archive Instant, and Deep Archive access tiers without operational overhead."
   },
   {
     id: "fc-10c",
     domainId: "cloud-technology",
     question: "Which database engine is fully managed by AWS, PostgreSQL/MySQL compatible, and 5x faster than standard MySQL?",
-    answer: "Amazon Aurora. It features automated 6-way replication across 3 AZs and auto-scaling storage up to 128 TiB."
+    answer: "Amazon Aurora. It features automated 6-way replication across 3 AZs, continuous S3 backups, and auto-scaling storage up to 128 TiB with sub-millisecond read replicas."
   },
   {
     id: "fc-10d",
     domainId: "cloud-technology",
     question: "What is the primary function of Amazon Route 53?",
-    answer: "Route 53 is a highly available and scalable Cloud Domain Name System (DNS) web service with health checking and latency-based routing."
+    answer: "Route 53 is a highly available and scalable Cloud Domain Name System (DNS) web service with health checking and advanced routing policies (Latency, Weighted, Geolocation, Failover)."
   },
   {
     id: "fc-10e",
     domainId: "cloud-technology",
-    question: "What service provides a dedicated private physical network connection from an on-premises data center to AWS?",
-    answer: "AWS Direct Connect. It bypasses the public internet for consistent network performance and security, unlike AWS Site-to-Site VPN."
+    question: "What service provides a dedicated private physical network fiber connection from an on-premises data center directly to AWS?",
+    answer: "AWS Direct Connect. It bypasses the public internet entirely to deliver consistent network bandwidth, reduced data egress costs, and heightened security."
   },
   {
     id: "fc-10f",
     domainId: "cloud-technology",
     question: "What is the difference between Amazon SQS and Amazon SNS?",
-    answer: "SQS is a message QUEUE service (decoupling applications via polling). SNS is a PUB/SUB notification service sending fan-out push messages (Email, SMS, HTTP, Lambda)."
+    answer: "• Amazon SQS: Message QUEUE service using a PULL model to decouple microservices (messages wait in queue until consumer polls them).\n• Amazon SNS: PUB/SUB notification service using a PUSH model to fan out messages instantly to multiple subscribers (Email, SMS, HTTP endpoints, Lambda, SQS)."
+  },
+  {
+    id: "fc-10g",
+    domainId: "cloud-technology",
+    question: "What is the difference between Amazon ECS, Amazon EKS, and AWS Fargate?",
+    answer: "• Amazon ECS: AWS-native container orchestration service.\n• Amazon EKS: Managed Kubernetes container orchestration service.\n• AWS Fargate: Serverless compute engine for containers that works with both ECS and EKS (removes need to provision/manage EC2 worker nodes)."
+  },
+  {
+    id: "fc-10h",
+    domainId: "cloud-technology",
+    question: "What is Amazon DynamoDB and what is DynamoDB Accelerator (DAX)?",
+    answer: "• Amazon DynamoDB: Fully-managed, serverless NoSQL key-value and document database delivering single-digit millisecond latency at any scale.\n• DAX: Dedicated in-memory cache for DynamoDB delivering 10x performance improvements down to MICROSECOND response times."
+  },
+  {
+    id: "fc-10i",
+    domainId: "cloud-technology",
+    question: "What is Amazon Redshift and how does it differ from Amazon RDS?",
+    answer: "• Amazon RDS: Online Transaction Processing (OLTP) for live read/write database transactions (MySQL, Postgres).\n• Amazon Redshift: Online Analytical Processing (OLAP) petabyte-scale data warehouse using columnar storage for massive complex SQL analytics queries."
+  },
+  {
+    id: "fc-10j",
+    domainId: "cloud-technology",
+    question: "What is the difference between AWS CloudFormation and AWS Elastic Beanstalk?",
+    answer: "• AWS CloudFormation: Infrastructure as Code (IaC) using declarative JSON/YAML templates to provision and model any AWS resource.\n• AWS Elastic Beanstalk: Platform as a Service (PaaS) where developers simply upload application code and Beanstalk automatically provisions EC2, ELB, Auto Scaling, and RDS."
+  },
+  {
+    id: "fc-10k",
+    domainId: "cloud-technology",
+    question: "What is the difference between AWS CloudFront and AWS Global Accelerator?",
+    answer: "• AWS CloudFront: Content Delivery Network (CDN) that caches web content (HTTP/S static and dynamic files) at global Edge Locations.\n• AWS Global Accelerator: Anycast IP service that routes non-HTTP/S TCP/UDP traffic over the AWS global private fiber backbone to the nearest healthy endpoint."
+  },
+  {
+    id: "fc-10l",
+    domainId: "cloud-technology",
+    question: "What is AWS Transit Gateway?",
+    answer: "AWS Transit Gateway acts as a central cloud router (hub-and-spoke) connecting thousands of Amazon VPCs and your on-premises customer networks together without complex point-to-point VPC peering meshes."
+  },
+  {
+    id: "fc-10m",
+    domainId: "cloud-technology",
+    question: "What is the difference between Amazon ElastiCache Redis and Memcached?",
+    answer: "• ElastiCache Redis: In-memory data store supporting complex data structures (sets, hashes, sorted sets), Multi-AZ replication, persistence, and pub/sub.\n• ElastiCache Memcached: Purely volatile, simple multithreaded object caching for basic string/object lookups without persistence."
+  },
+  {
+    id: "fc-10n",
+    domainId: "cloud-technology",
+    question: "What is AWS Step Functions?",
+    answer: "A visual, low-code serverless workflow orchestration service that coordinates multiple AWS services (Lambda functions, ECS tasks, SNS) into resilient, sequential state machines."
   },
 
-  // Domain 4: Billing & Pricing
+  // =========================================================================
+  // DOMAIN 4: BILLING, PRICING & SUPPORT (12% OF EXAM)
+  // =========================================================================
   {
     id: "fc-11",
     domainId: "billing-pricing",
-    question: "What tool should you use to receive automated alerts when your projected monthly spend crosses $200?",
-    answer: "AWS Budgets. It handles proactive budget limit configurations and triggers email/SNS alerts when limits are approached."
+    question: "What tool should you use to receive automated alerts when your projected monthly spend crosses a specific dollar threshold?",
+    answer: "AWS Budgets. It handles proactive budget limit configurations and triggers automated email/SNS alerts or automated actions when limits are approached."
   },
   {
     id: "fc-12",
     domainId: "billing-pricing",
     question: "Who is the Technical Account Manager (TAM) and which support plan includes them?",
-    answer: "The TAM is a designated AWS engineer acting as your strategic technical advocate. They are included in the Enterprise Support Plan (and Enterprise On-Ramp)."
+    answer: "The TAM is a designated AWS senior technical engineer acting as your primary advisor and advocate. They are included in the Enterprise Support Plan (and pooled in Enterprise On-Ramp)."
   },
   {
     id: "fc-12b",
@@ -219,13 +341,49 @@ export const initialFlashcards: Flashcard[] = [
     id: "fc-12c",
     domainId: "billing-pricing",
     question: "What EC2 purchasing option offers up to 90% discount off On-Demand pricing for fault-tolerant workloads?",
-    answer: "Spot Instances. They utilize spare AWS compute capacity but can be reclaimed with a 2-minute notice."
+    answer: "Spot Instances. They utilize spare AWS compute capacity but can be reclaimed by AWS with a 2-minute termination notice if capacity is needed elsewhere."
   },
   {
     id: "fc-12d",
     domainId: "billing-pricing",
     question: "Which AWS service analyzes configuration logs to recommend optimal AWS compute resources (EC2, Lambda, EBS) using ML?",
     answer: "AWS Compute Optimizer. It reduces costs and improves performance by identifying underutilized or over-provisioned resources."
+  },
+  {
+    id: "fc-12e",
+    domainId: "billing-pricing",
+    question: "What is the difference between AWS Pricing Calculator and AWS Cost Explorer?",
+    answer: "• AWS Pricing Calculator: PRE-DEPLOYMENT tool to estimate future costs of planned AWS architectures before launching resources.\n• AWS Cost Explorer: POST-DEPLOYMENT tool to visualize, analyze, and forecast historical usage and spending of already active resources."
+  },
+  {
+    id: "fc-12f",
+    domainId: "billing-pricing",
+    question: "What are the 4 main AWS Support Plans and their target response times for critical issues?",
+    answer: "• Basic: Free, 24/7 customer service, 7 core Trusted Advisor checks.\n• Developer: Business hours email, <12 hr general guidance, <24 hr system impaired.\n• Business: 24/7 phone/chat/email, <1 hr production down, full Trusted Advisor checks.\n• Enterprise: 24/7 phone/chat/email, <15 min business-critical system down, Designated TAM & Concierge."
+  },
+  {
+    id: "fc-12g",
+    domainId: "billing-pricing",
+    question: "What are the 5 categories of checks evaluated by AWS Trusted Advisor?",
+    answer: "1. Cost Optimization\n2. Performance\n3. Security\n4. Fault Tolerance\n5. Service Limits (Service Quotas)"
+  },
+  {
+    id: "fc-12h",
+    domainId: "billing-pricing",
+    question: "How does Consolidated Billing in AWS Organizations help lower costs?",
+    answer: "It combines usage across all member accounts in an Organization onto a single monthly bill, enabling pooled volume discounts (e.g. tier discounts on aggregate S3 data storage and EC2 usage hours)."
+  },
+  {
+    id: "fc-12i",
+    domainId: "billing-pricing",
+    question: "What are Cost Allocation Tags on AWS?",
+    answer: "Key-value metadata labels assigned to AWS resources (e.g. Environment=Production, CostCenter=Marketing) to organize and categorize cost reports in AWS Cost Explorer and Cost & Usage Reports (CUR)."
+  },
+  {
+    id: "fc-12j",
+    domainId: "billing-pricing",
+    question: "What are Savings Plans and how do they differ from Reserved Instances (RIs)?",
+    answer: "• Savings Plans: Flexible commitment to a consistent amount of compute usage ($/hour) for 1 or 3 years (applies across EC2, Fargate, and Lambda automatically).\n• Reserved Instances: Commitment to specific instance types/OS in specific regions; less flexible than Compute Savings Plans."
   }
 ];
 
