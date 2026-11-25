@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="112" fill="#0D121C"/>
+  <defs>
+    <linearGradient id="amberGold" x1="112" y1="148" x2="400" y2="364" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="edgeRim" x1="112" y1="148" x2="400" y2="364" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FEF3C7" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#B45309" stop-opacity="0.4"/>
+    </linearGradient>
+  </defs>
+  <path d="M366 346H156c-38.7 0-70-31.3-70-70 0-34.5 24.9-63.2 57.8-68.9C155.1 163.5 194.8 132 242 132c52.7 0 96.1 40.3 100.8 91.8C383.8 228.1 416 262.8 416 305c0 22.6-22.4 41-50 41z" fill="url(#amberGold)" stroke="url(#edgeRim)" stroke-width="6"/>
+  <path d="M188 262l42 40 94-94" stroke="#0D121C" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

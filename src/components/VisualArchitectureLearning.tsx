@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Layers, Shield, Cpu, Zap, Server, Database, Globe, Lock, 
   CheckCircle2, AlertTriangle, HelpCircle, RefreshCw, Sparkles, 
-  ArrowRight, Compass, Flame, Award, ChevronRight, Eye
+  ArrowRight, Compass, Flame, Award, ChevronRight, Eye, Volume2, VolumeX, Headphones
 } from "lucide-react";
+import { useAudioLesson } from "../contexts/AudioLessonContext";
 
 interface ArchitectureNode {
   id: string;
@@ -216,6 +217,7 @@ export const VisualArchitectureLearning: React.FC = () => {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
+  const { playLesson, currentLesson, isPlaying: isGlobalPlaying } = useAudioLesson();
 
   const currentScenario = ARCHITECTURE_SCENARIOS.find(s => s.id === selectedScenarioId) || ARCHITECTURE_SCENARIOS[0];
 
@@ -307,12 +309,38 @@ export const VisualArchitectureLearning: React.FC = () => {
         {/* Left / Top: Interactive Blueprint Topology Canvas (7 cols) */}
         <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-sm p-5 space-y-4 shadow-md flex flex-col justify-between">
           <div className="space-y-1 border-b border-slate-800 pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <h3 className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
                 <Globe className="w-4 h-4 text-blue-400" />
                 {currentScenario.title}
               </h3>
-              <span className="text-[10px] text-indigo-400 font-mono font-bold">Interactive Nodes: {currentScenario.nodes.length}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const nodeSummary = currentScenario.nodes
+                      .map((n, i) => `Component ${i + 1}: ${n.name}. ${n.description} Exam tip: ${n.examTip}`)
+                      .join(" ");
+                    playLesson(
+                      {
+                        id: `arch-blueprint-${currentScenario.id}`,
+                        title: currentScenario.title,
+                        module: "Architecture Studio",
+                        text: `${currentScenario.title}. ${currentScenario.description} ${nodeSummary}`,
+                      },
+                      { toggleIfSame: true }
+                    );
+                  }}
+                  className={`px-2.5 py-1 rounded border text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                    isGlobalPlaying && currentLesson?.id === `arch-blueprint-${currentScenario.id}`
+                      ? "bg-amber-500 text-slate-950 border-amber-500"
+                      : "bg-slate-800 border-slate-700 text-indigo-300 hover:text-white"
+                  }`}
+                >
+                  <Headphones className="w-3.5 h-3.5" />
+                  <span>{isGlobalPlaying && currentLesson?.id === `arch-blueprint-${currentScenario.id}` ? "Pause Tour" : "Audio Walkthrough"}</span>
+                </button>
+                <span className="text-[10px] text-indigo-400 font-mono font-bold">Interactive Nodes: {currentScenario.nodes.length}</span>
+              </div>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
               {currentScenario.description}
@@ -379,9 +407,37 @@ export const VisualArchitectureLearning: React.FC = () => {
                     <span className="text-[10px] text-indigo-400 uppercase font-mono font-bold">Category: {selectedNode.category}</span>
                   </div>
                 </div>
-                <span className="bg-emerald-500/10 text-emerald-400 text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-500/20">
-                  Active Inspector
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      playLesson(
+                        {
+                          id: `arch-node-${currentScenario.id}-${selectedNode.id}`,
+                          title: selectedNode.name,
+                          module: "Architecture Node",
+                          text: `${selectedNode.name}. ${selectedNode.description} Exam tip: ${selectedNode.examTip}. Security pillar: ${selectedNode.securityPillar}. Cost pillar: ${selectedNode.costPillar}.`,
+                        },
+                        { toggleIfSame: true }
+                      )
+                    }
+                    className={`px-2.5 py-1 rounded border text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
+                      isGlobalPlaying && currentLesson?.id === `arch-node-${currentScenario.id}-${selectedNode.id}`
+                        ? "bg-amber-500 text-slate-950 border-amber-500"
+                        : "bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+                    }`}
+                    title="Narrate service pillars"
+                  >
+                    {isGlobalPlaying && currentLesson?.id === `arch-node-${currentScenario.id}-${selectedNode.id}` ? (
+                      <VolumeX className="w-3.5 h-3.5" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Listen</span>
+                  </button>
+                  <span className="bg-emerald-500/10 text-emerald-400 text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-500/20">
+                    Active Inspector
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-3 text-xs">

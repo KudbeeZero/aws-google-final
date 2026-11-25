@@ -5,7 +5,7 @@ import {
   AlertTriangle, TrendingUp, ShieldCheck, Bot, HelpCircle, Zap, Lock, Cloud, 
   CloudLightning, Key, UserCheck, RefreshCw, Volume2, VolumeX, ExternalLink, 
   Mail, SlidersHorizontal, Check, X, Compass, Cpu, FileQuestion, Briefcase, 
-  Coins, Database, Server, Puzzle, ArrowRight, Gamepad2, Vault, Crown
+  Coins, Database, Server, Puzzle, ArrowRight, Gamepad2, Vault, Crown, Building2, Headphones, Radio
 } from "lucide-react";
 import { DomainData, Flashcard, Achievement } from "../types";
 import { FirstTimeTools } from "./FirstTimeTools";
@@ -16,7 +16,13 @@ import { MonthlyHeatmap } from "./MonthlyHeatmap";
 import { Achievements } from "./Achievements";
 import { GlobalLeaderboard } from "./GlobalLeaderboard";
 import { ReadinessMilestones, READINESS_MILESTONES } from "./ReadinessMilestones";
+import { DailySmartSprint } from "./DailySmartSprint";
+import { useAudioLesson } from "../contexts/AudioLessonContext";
+import { useAgentWorkforce } from "../contexts/AgentWorkforceContext";
+import { AWS_SIX_PILLARS, WORKFORCE_AGENTS } from "../types/workforce";
 import { loginWithGoogle, loginAnonymously, logoutUser, registerWithEmail, loginWithEmail, getAuthDiagnostics, FirebaseAuthError } from "../lib/firebase";
+import { DashboardAnalyticsCharts } from "./DashboardAnalyticsCharts";
+import { trickQuestions } from "../data";
 
 const AchievementIcon: React.FC<{ name: string; unlocked: boolean }> = ({ name, unlocked }) => {
   const baseClass = `w-5 h-5 ${unlocked ? "text-[#FF9900]" : "text-slate-400"}`;
@@ -57,6 +63,7 @@ interface DashboardViewProps {
   redirectErrorGuide?: string | null;
   interviewHistory?: any[];
   onOpenExamConfidenceModal?: () => void;
+  onMarkCard?: (cardId: string, status: "known" | "review") => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -83,6 +90,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   redirectErrorGuide,
   interviewHistory = [],
   onOpenExamConfidenceModal,
+  onMarkCard,
 }) => {
   // Calculate statistics
   const totalCards = flashcards.length;
@@ -169,20 +177,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
   }, [redirectError, redirectSuggestedAction, redirectErrorGuide]);
 
-  const [isPlayingVoice, setIsPlayingVoice] = React.useState(false);
+  const { playLesson, currentLesson, isPlaying: isGlobalPlaying, setIsTourModalOpen, setIsDrawerOpen } = useAudioLesson();
+  const { activeCertTrack, setActiveCertTrack, memory: workforceMemory, triggerPillarBubble, setIsMeshSheetOpen } = useAgentWorkforce();
+  const isPlayingVoice = isGlobalPlaying && currentLesson?.id === "dashboard-voice-summary";
 
   const handlePlayVoiceSummary = () => {
-    if (!('speechSynthesis' in window)) {
-      alert("Text-to-speech is not supported in this browser.");
-      return;
-    }
-    
-    if (isPlayingVoice) {
-      window.speechSynthesis.cancel();
-      setIsPlayingVoice(false);
-      return;
-    }
-
     const textParts = [];
     if (streak > 0) {
       textParts.push(`Great job! You are currently on a ${streak} day study streak.`);
@@ -200,17 +199,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       textParts.push(`You have mastered all domains. You are exam ready!`);
     }
 
-    const utterance = new SpeechSynthesisUtterance(textParts.join(" "));
-    const voices = window.speechSynthesis.getVoices();
-    const englishVoices = voices.filter(v => v.lang.startsWith('en'));
-    const preferredVoice = englishVoices.find(v => v.name.includes('Google') || v.name.includes('Premium') || v.name.includes('Natural')) || englishVoices[0];
-    if (preferredVoice) utterance.voice = preferredVoice;
-    
-    utterance.onstart = () => setIsPlayingVoice(true);
-    utterance.onend = () => setIsPlayingVoice(false);
-    utterance.onerror = () => setIsPlayingVoice(false);
-    
-    window.speechSynthesis.speak(utterance);
+    playLesson(
+      {
+        id: "dashboard-voice-summary",
+        title: "Daily Readiness & Gap Summary",
+        module: "Dashboard Briefing",
+        text: textParts.join(" "),
+      },
+      { toggleIfSame: true }
+    );
   };
 
   // Dynamically parse Socratic Professor chat counts
@@ -372,6 +369,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       dailyGoal: true,
       weeklyChart: true,
       monthlyHeatmap: true,
+      analyticsCharts: true,
       diagnostics: true,
       domainBreakdown: true,
       interviewArchive: true,
@@ -421,143 +419,201 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       
-      {/* DashboardHeader with Streak and Greetings */}
+      {/* Today's Focus & 3-Minute Smart Sprint Hero */}
       {widgetVisibility.streakCard && (
-        <div id="dashboard-header" className="bg-gradient-to-r from-amber-500 via-[#FF9900] to-orange-600 rounded-sm p-5 sm:p-6 text-white shadow-md relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4">
-          {/* Abstract background blobs for premium aesthetic */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-2xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-16 -mb-16 blur-xl pointer-events-none" />
-          
-          <div className="relative z-10 text-center md:text-left">
-            <span className="bg-white/20 text-white text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-[2px] tracking-widest leading-none">
-              AWS Certified Cloud Practitioner (CLF-C02)
-            </span>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight mt-2 text-white">
-              AWS Masterclass Study Dashboard
-            </h1>
-            <p className="text-xs text-white/90 leading-normal mt-1 max-w-xl">
-              Welcome back to your ultimate interactive training console. Build muscle memory through active recall, tackle challenging exam simulations, and sharpen your cloud architect reasoning.
+        <DailySmartSprint
+          flashcards={flashcards}
+          domains={domains}
+          studyHistory={studyHistory}
+          onMarkCard={onMarkCard || (() => {})}
+          onAddStudyMinutes={onAddStudyMinutes}
+          onNavigateToTab={onNavigateToTab}
+          readinessScore={readinessScore}
+          streak={streak}
+        />
+      )}
+
+      {/* AI Audio Tour, Dual-Host Podcasts & Listening Studio Banner */}
+      <div className="bg-slate-900 dark:bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+            <Radio className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-400">
+              Gemini 3.8 Neural Audio · Spatial Soundscapes
+            </div>
+            <h3 className="text-sm sm:text-base font-bold tracking-tight text-white mt-0.5">
+              AI Guided Audio Tour & Dual-Host Podcasts
+            </h3>
+            <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+              Take a 5-stop narrated tour of CloudMaster, stream Alex &amp; Maya deep-dive exam podcasts, or ask questions hands-free with focus ambience.
             </p>
           </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsTourModalOpen(true)}
+            className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#FF9900] hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <Headphones className="w-4 h-4" />
+            <span>Launch Audio Tour</span>
+          </button>
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            Soundscapes
+          </button>
+        </div>
+      </div>
 
-          {/* Flame Badge / Streak Indicator section */}
-          <div className="relative z-10 flex items-center gap-3 bg-white/15 backdrop-blur-xs border border-white/25 px-4 py-3 rounded-sm shadow-inner shrink-0 w-full sm:w-auto justify-center sm:justify-start">
-            <div className="relative flex items-center justify-center">
-              {streak >= 3 ? (
-                <motion.div
-                  animate={{
-                    scale: [1, 1.12, 1],
-                    rotate: [0, 4, -4, 0],
-                  }}
-                  transition={{
-                    duration: 1.8,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                  className="relative"
+      {/* 6 AWS Well-Architected Pillars & Cross-Aware AI Workforce Command Strip */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              AWS Well-Architected Framework · 7 Synced AI Agents · {activeCertTrack}
+            </div>
+            <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white tracking-tight mt-0.5">
+              6-Pillar Mastery &amp; Multi-Cert Question Bank
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+              {(["CLF-C02", "SAA-C03"] as const).map((track) => (
+                <button
+                  key={track}
+                  type="button"
+                  onClick={() => setActiveCertTrack(track)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                    activeCertTrack === track
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
                 >
-                  <Flame className={`w-10 h-10 drop-shadow-[0_0_8px_rgba(255,255,255,0.7)] ${streak >= 7 ? "text-rose-200 fill-rose-300" : "text-amber-200 fill-amber-300"}`} />
-                  {/* Visual sparkles or pulse rings for 3/7 day streaks */}
-                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-                  </span>
-                </motion.div>
-              ) : (
-                <Flame className="w-10 h-10 text-white/45" />
-              )}
+                  {track}
+                </button>
+              ))}
             </div>
-            
-            <div className="flex flex-col">
-              <span className="text-[9px] font-black uppercase tracking-widest text-white/70 leading-none">
-                Daily Study Streak
-              </span>
-              <span className="text-xl font-black mt-1 text-white tracking-tight flex items-center gap-2">
-                {streak} {streak === 1 ? "Day" : "Days"}
-                {streak >= 7 ? (
-                  <span className="bg-rose-500/30 text-white border border-rose-500/50 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-[2px] tracking-wider animate-pulse shrink-0">
-                    7-Day Supernova! 🚀
-                  </span>
-                ) : streak >= 3 ? (
-                  <span className="bg-amber-500/30 text-white border border-amber-500/50 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-[2px] tracking-wider shrink-0">
-                    3-Day Burner! 🔥
-                  </span>
-                ) : (
-                  <span className="text-white/60 text-xs font-normal shrink-0">
-                    (Keep going!)
-                  </span>
-                )}
-              </span>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigateToTab("question-bank")}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-[#FF9900] text-white dark:text-slate-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>AI Question Bank</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsMeshSheetOpen(true)}
+              className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer whitespace-nowrap"
+            >
+              Agent Mesh
+            </button>
           </div>
         </div>
-      )}
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          {AWS_SIX_PILLARS.map((pillar) => {
+            const stat = workforceMemory.pillarScores[pillar.id] || { score: 55, attempts: 0, correct: 0 };
+            const lead = WORKFORCE_AGENTS[pillar.leadAgent];
+            return (
+              <button
+                key={pillar.id}
+                type="button"
+                onClick={() => triggerPillarBubble(pillar.id)}
+                className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-[#FF9900] bg-slate-50/70 dark:bg-slate-950/50 text-left transition-colors cursor-pointer space-y-2"
+                title={`Tap for spoken ${pillar.name} Pillar coaching bubble from ${lead.name}`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    {pillar.shortName}
+                  </span>
+                  <span className="text-xs font-mono font-bold tabular-nums text-slate-700 dark:text-slate-200">
+                    {stat.score}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      stat.score >= 80 ? "bg-emerald-500" : stat.score >= 65 ? "bg-[#FF9900]" : "bg-rose-500"
+                    }`}
+                    style={{ width: `${stat.score}%` }}
+                  />
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  {lead.name} · Listen
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       
-      {/* Cloud Integration / Progress Sync Control Center */}
+      {/* Cloud Integration / Progress Sync Control Center (Compact when signed in to reduce vertical clutter) */}
       {widgetVisibility.cloudSync && (
-        <div className={`border rounded-sm p-4 sm:p-5 transition-all ${
-          user 
-            ? 'bg-white border-slate-200 shadow-xs' 
-            : 'bg-gradient-to-r from-amber-50/30 via-white to-white border-amber-300 dark:border-amber-900/60 shadow-md shadow-amber-500/5 relative overflow-hidden ring-1 ring-amber-500/10'
-        }`}>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className={`p-2.5 rounded-sm shrink-0 ${user ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-[#FF9900]/10 text-[#FF9900] border border-[#FF9900]/20'}`}>
-                {user ? (
-                  <UserCheck className="w-5 h-5 shrink-0" />
-                ) : (
-                  <Cloud className="w-5 h-5 shrink-0" />
-                )}
+        user ? (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl px-4 py-3 shadow-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-center shrink-0">
+                <UserCheck className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                {!user && (
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className="bg-[#FF9900]/10 text-[#FF9900] text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-[2px] border border-[#FF9900]/25 animate-pulse">
-                      Sync Recommended
-                    </span>
-                    <span className="text-[10px] text-amber-600 font-extrabold hidden sm:inline">
-                      Local-only session active
-                    </span>
-                  </div>
-                )}
-                <h4 className="font-extrabold text-sm text-slate-800 tracking-tight leading-none uppercase">
-                  {user ? "AWS Masterclass Cloud Sync Active" : "Connect AWS Cloud Study Sync"}
+                <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                  Cloud Sync Active
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  {user.email || "Guest Sync"} · {syncing ? "Syncing…" : "Saved"}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  setAuthError(null);
+                  await logoutUser();
+                } catch (e) {
+                  console.error("Logout failed:", e);
+                }
+              }}
+              className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 hover:border-red-300 hover:text-red-600 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-xl transition-colors shrink-0 cursor-pointer"
+            >
+              Sign Out
+            </button>
+          </div>
+        ) : (
+        <div className="border rounded-2xl p-4 sm:p-5 transition-all bg-gradient-to-r from-amber-50/40 via-white to-white dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 border-amber-200 dark:border-amber-800/60 shadow-xs relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="p-2.5 rounded-xl shrink-0 bg-[#FF9900]/10 text-[#FF9900] border border-[#FF9900]/20">
+                <Cloud className="w-5 h-5 shrink-0" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                  <span>Sync Recommended</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-slate-500 dark:text-slate-400 hidden sm:inline">
+                    Local-only session active
+                  </span>
+                </div>
+                <h4 className="font-bold text-sm text-slate-900 dark:text-white tracking-tight leading-snug">
+                  Connect Cloud Study Sync
                 </h4>
-                <p className="text-xs text-slate-500 leading-normal mt-1.5">
-                  {user ? (
-                    <span>
-                      Your progress is synchronized securely. Logged in as <strong className="text-slate-700">{user.email || 'Anonymous Guest'}</strong>. {syncing ? <span className="text-[#FF9900] animate-pulse">Syncing changes...</span> : <span className="text-emerald-600 font-medium">Progress saved to Firestore database.</span>}
-                    </span>
-                  ) : (
-                    <span>
-                      Keep your flashcards, scores, and exam readiness synchronized. Authenticate to secure your progression database from cache resets.
-                    </span>
-                  )}
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal mt-1">
+                  Keep your flashcards, scores, and exam readiness synchronized across iPhone, iPad, and desktop.
                 </p>
               </div>
             </div>
             
             <div className="flex items-center gap-2 sm:self-center shrink-0">
               {authLoading ? (
-                <div className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-500 text-xs font-bold rounded-sm animate-pulse">
+                <div className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-500 text-xs font-bold rounded-xl">
                   <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />
-                  <span>Checking credentials...</span>
-                </div>
-              ) : user ? (
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button
-                    onClick={async () => {
-                      try {
-                        setAuthError(null);
-                        await logoutUser();
-                      } catch (e) {
-                        console.error("Logout failed:", e);
-                      }
-                    }}
-                    className="w-full sm:w-auto px-4 py-2 border border-slate-200 hover:border-red-200 hover:bg-red-50 hover:text-red-700 text-slate-700 text-xs font-bold rounded-sm transition-all text-center cursor-pointer"
-                  >
-                    Sign Out
-                  </button>
+                  <span>Checking…</span>
                 </div>
               ) : showEmailAuth ? (
                 <div className="flex flex-col gap-3 w-full max-w-sm bg-slate-50 dark:bg-slate-900/40 p-4 rounded-sm border border-slate-200 dark:border-slate-800 animate-fade-in sm:self-center shrink-0">
@@ -843,25 +899,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           )}
         </div>
+        )
       )}
 
       {/* Dashboard Customization Control Bar */}
-      <div className="flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2.5 rounded-sm shadow-xs">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-3 rounded-2xl shadow-xs">
+        <div className="flex items-center gap-2.5">
           <SlidersHorizontal className="w-4 h-4 text-[#FF9900]" />
-          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-            Dashboard Layout Customizer
+          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+            Dashboard Layout
           </span>
-          <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
-            ({Object.values(widgetVisibility).filter(Boolean).length} / {Object.keys(widgetVisibility).length} widgets visible)
+          <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline tabular-nums">
+            · {Object.values(widgetVisibility).filter(Boolean).length} of {Object.keys(widgetVisibility).length} widgets visible
           </span>
         </div>
         <button
           onClick={() => setShowCustomizeModal(true)}
-          className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-sm transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+          className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
         >
           <SlidersHorizontal className="w-3.5 h-3.5 text-[#FF9900]" />
-          <span>Customize Widgets</span>
+          <span>Customize</span>
         </button>
       </div>
 
@@ -871,63 +928,57 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           
           {/* Readiness Score Circular/Hero Gauge (4 cols) */}
           {widgetVisibility.readinessScore && (
-            <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-sm flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-2 bg-[#FF9900]/10 text-[#FF9900] text-[9px] font-bold uppercase tracking-wider rounded-bl-sm">
-                Ready Check
-              </div>
-              
-              <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">
+            <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl flex flex-col items-center justify-center text-center shadow-xs relative overflow-hidden">
+              <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
                 Exam Readiness Score
               </h3>
 
               <div className="relative flex items-center justify-center mb-3">
                 <div className="w-32 h-32 rounded-full border-4 border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center relative">
-                  <span className="text-4xl font-black text-slate-800 dark:text-white tracking-tight">
+                  <span className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
                     {readinessScore}%
                   </span>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                    Score
+                  <span className="text-[11px] font-medium text-slate-400 mt-0.5">
+                    Ready
                   </span>
                   <div 
-                    className={`absolute inset-0 rounded-full border-4 border-t-amber-500 border-r-amber-500 animate-spin-slow opacity-15`}
+                    className="absolute inset-0 rounded-full border-4 border-t-amber-500 border-r-amber-500 opacity-30"
                   />
                 </div>
               </div>
 
-              {/* Current Milestone Rank Tag */}
-              <div className="flex items-center gap-2 mb-2">
-                <div className={`px-3 py-1 rounded-full border text-xs font-bold ${readinessColor}`}>
-                  {readinessLabel}
-                </div>
-                <div className="px-2.5 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-mono font-bold flex items-center gap-1">
-                  {readinessScore >= 100 ? "👑 Cloud Guru" : readinessScore >= 75 ? "🥇 Lead Specialist" : readinessScore >= 50 ? "🥈 Cloud Architect" : readinessScore >= 25 ? "🥉 Cloud Novice" : "🚀 Explorer"}
-                </div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">
+                <span>{readinessLabel}</span>
+                <span aria-hidden="true">·</span>
+                <span className="text-amber-600 dark:text-amber-400">
+                  {readinessScore >= 100 ? "Cloud Guru" : readinessScore >= 75 ? "Lead Specialist" : readinessScore >= 50 ? "Cloud Architect" : readinessScore >= 25 ? "Cloud Novice" : "Explorer"}
+                </span>
               </div>
 
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xs leading-normal mt-1">
-                Readiness improves as you mark cards as <strong>Mastered</strong> in the flashcard deck and pass scenarios in the <strong>Exam Simulator</strong>.
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed mt-1">
+                Improves as you mark cards <strong>Mastered</strong> and solve scenarios in the <strong>Exam Simulator</strong>.
               </p>
             </div>
           )}
 
           {/* Overview Stats (4 cols) */}
           {widgetVisibility.learningPulse && (
-            <div className="lg:col-span-4 bg-white border border-slate-200 p-6 rounded-sm shadow-sm flex flex-col justify-between">
+            <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-xs flex flex-col justify-between">
               <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+                <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">
                   Your Learning Pulse
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   
                   {/* Stat Card 1 */}
-                  <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-sm">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
-                      Flashcard Mastery
+                  <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800 rounded-xl">
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">
+                      Flashcards
                     </span>
-                    <span className="text-2xl font-black text-slate-800 tracking-tight block mt-1">
+                    <span className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight block mt-1 tabular-nums">
                       {knownCards} <span className="text-xs text-slate-400 font-medium">/ {totalCards}</span>
                     </span>
-                    <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
                       <div 
                         className="bg-blue-600 h-full rounded-full transition-all duration-300"
                         style={{ width: `${(knownCards / (totalCards || 1)) * 100}%` }}
@@ -936,48 +987,45 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
 
                   {/* Stat Card 2 */}
-                  <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-sm">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
-                      Simulator Accuracy
+                  <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800 rounded-xl">
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">
+                      Accuracy
                     </span>
-                    <span className="text-2xl font-black text-slate-800 tracking-tight block mt-1">
+                    <span className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight block mt-1 tabular-nums">
                       {Math.round(quizScorePercent)}%
                     </span>
-                    <span className="text-[10px] text-slate-400 block mt-1">
-                      {correctQuizzes} correct of {attemptedQuizzes} attempts
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-1 tabular-nums">
+                      {correctQuizzes}/{attemptedQuizzes} passed
                     </span>
                   </div>
 
                   {/* Stat Card 3 */}
-                  <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-sm">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
-                      Review Pool size
+                  <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800 rounded-xl">
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">
+                      Review Queue
                     </span>
-                    <span className="text-2xl font-black text-amber-600 tracking-tight block mt-1 flex items-center gap-1.5">
+                    <span className="text-xl font-extrabold text-amber-600 dark:text-amber-400 tracking-tight block mt-1 tabular-nums">
                       {Object.values(studyHistory).filter((v) => v === "review").length}
-                      {Object.values(studyHistory).filter((v) => v === "review").length > 0 && (
-                        <span className="animate-pulse inline-block w-2 h-2 rounded-full bg-amber-500"></span>
-                      )}
                     </span>
                     <button 
                       onClick={() => onNavigateToTab("flashcards")}
-                      className="text-[9px] font-bold text-blue-600 hover:underline uppercase tracking-wider block mt-1 text-left"
+                      className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline block mt-1 text-left cursor-pointer"
                     >
-                      Review items →
+                      Review now →
                     </button>
                   </div>
 
                 </div>
               </div>
 
-              <div className="mt-5 p-3.5 bg-amber-50/50 border border-amber-100 rounded-sm flex gap-3 items-start">
+              <div className="mt-5 p-3.5 bg-amber-50/70 dark:bg-amber-950/25 border border-amber-200/60 dark:border-amber-800/40 rounded-xl flex gap-3 items-start">
                 <Sparkles className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                 <div>
-                  <h5 className="text-xs font-bold text-slate-800">
-                    AWS Pro Tip: Focus on Domain Weight
+                  <h5 className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                    Focus on High-Weight Domains
                   </h5>
-                  <p className="text-[11px] text-slate-600 leading-normal mt-0.5">
-                    Domain 2 (Security) and Domain 3 (Technology) account for over <strong>64%</strong> of the CLF-C02 questions. We recommend focusing heavily on service distinctions like WAF vs Shield in the <strong>Distractor Vault</strong>.
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-normal mt-0.5">
+                    Security (Domain 2) and Technology (Domain 3) account for <strong>64%</strong> of CLF-C02 questions.
                   </p>
                 </div>
               </div>
@@ -1042,8 +1090,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pt-1">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3 pt-1">
             {[
+              {
+                id: "question-bank",
+                title: `AI Question Bank (${activeCertTrack})`,
+                desc: "Gemini 4 peer-reviewed CLF-C02 & SAA-C03 scenarios across all 6 AWS Pillars",
+                icon: ShieldCheck,
+                color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700",
+                badge: "PostgreSQL + AI",
+              },
+              {
+                id: "blueprint-lesson",
+                title: "CLF-C02 Blueprint Lesson",
+                desc: "6-chapter architectural skyscraper masterclass with audio + mastery checks",
+                icon: Building2,
+                color: "text-[#FF9900] bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700",
+                badge: "Video Lesson",
+              },
               {
                 id: "slots",
                 title: "New Age Slot Machine",
@@ -1146,26 +1210,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div
                   key={station.id}
                   onClick={() => onNavigateToTab(station.id)}
-                  className="group relative p-3.5 rounded-sm border border-slate-200 dark:border-slate-800 hover:border-[#FF9900] dark:hover:border-[#FF9900] bg-white dark:bg-slate-950 hover:bg-orange-50/20 dark:hover:bg-orange-950/10 transition-all cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-xs"
+                  className="group relative p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-[#FF9900] dark:hover:border-[#FF9900] bg-white dark:bg-slate-950 hover:bg-orange-50/20 dark:hover:bg-orange-950/10 transition-all cursor-pointer flex flex-col justify-between shadow-2xs"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <div className={`p-1.5 rounded-xs border ${station.color}`}>
+                      <div className={`p-1.5 rounded-lg border ${station.color}`}>
                         <IconComp className="w-4 h-4" />
                       </div>
-                      <span className="text-[8px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                      <span className="hidden sm:inline-block text-[10px] font-medium text-slate-400 dark:text-slate-500">
                         {station.badge}
                       </span>
                     </div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-[#FF9900] dark:group-hover:text-[#FF9900] transition-colors leading-tight">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-[#FF9900] transition-colors leading-tight">
                       {station.title}
                     </h4>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug line-clamp-2">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug line-clamp-2">
                       {station.desc}
                     </p>
                   </div>
-                  <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] font-bold text-[#FF9900]">
-                    <span>Launch Station</span>
+                  <div className="hidden sm:flex mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80 items-center justify-between text-[11px] font-semibold text-[#FF9900]">
+                    <span>Open</span>
                     <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
@@ -1199,6 +1263,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {widgetVisibility.monthlyHeatmap && (
         <MonthlyHeatmap
           dailyMinutesLog={dailyMinutesLog}
+          dailyStudyGoal={dailyStudyGoal}
+        />
+      )}
+
+      {/* Recharts Analytics: Domain Mastery & Quiz Accuracy Trends */}
+      {widgetVisibility.analyticsCharts && (
+        <DashboardAnalyticsCharts
+          domains={domains}
+          flashcards={flashcards}
+          studyHistory={studyHistory}
+          quizHistory={quizHistory}
+          trickQuestions={trickQuestions}
+          dailyMinutesLog={dailyMinutesLog}
+          todayStudyMinutes={todayStudyMinutes}
           dailyStudyGoal={dailyStudyGoal}
         />
       )}
@@ -1471,6 +1549,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 { key: "dailyGoal", label: "Daily Study Goal Progress Tracker", desc: "Interactive study minute quota tracker with quick add buttons." },
                 { key: "weeklyChart", label: "Weekly Study Progress Line Chart", desc: "7-day study consistency chart with goal benchmarks." },
                 { key: "monthlyHeatmap", label: "Monthly Activity Heatmap", desc: "GitHub-style daily study intensity heatmap." },
+                { key: "analyticsCharts", label: "Learner Progress & Recharts Analytics", desc: "Interactive Recharts visualization for domain mastery, quiz accuracy, and weekly study rhythm." },
                 { key: "diagnostics", label: "AI Study Diagnostics & Weakness Analysis", desc: "Strongest suit, blind spot advice, and voice summary." },
                 { key: "domainBreakdown", label: "Exam Domain Breakdown & Mastery", desc: "Domain-by-domain breakdown with mastery progress bars." },
                 { key: "interviewArchive", label: "Technical Interview Archive", desc: "Saved mock technical interview transcripts and scores." },

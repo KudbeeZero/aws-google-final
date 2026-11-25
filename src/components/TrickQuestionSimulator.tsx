@@ -19,10 +19,13 @@ import {
   BarChart3, 
   ShieldCheck, 
   Sparkles,
-  EyeOff
+  EyeOff,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import { TrickQuestion, TrickQuestionOption } from "../types";
 import { ParticleEffect } from "./ParticleEffect";
+import { useAudioLesson } from "../contexts/AudioLessonContext";
 import { 
   addXP, 
   recordGameSessionMetric, 
@@ -120,6 +123,10 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
     }
     setShowClue(prev => !prev);
   };
+
+  const { playLesson, currentLesson, isPlaying: isGlobalPlaying } = useAudioLesson();
+  const scenarioAudioId = `sim-q-${activeQuestion.id}`;
+  const explainAudioId = `sim-exp-${activeQuestion.id}`;
 
   // Tier 2: 50:50 Distractor Elimination
   const handleUse5050 = () => {
@@ -337,15 +344,45 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
                 Question {currentIdx + 1} of {questions.length} • {activeQuestion.domainName}
               </span>
               
-              {quizHistory[activeQuestion.id] !== undefined && (
-                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
-                  quizHistory[activeQuestion.id] 
-                    ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" 
-                    : "bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300"
-                }`}>
-                  {quizHistory[activeQuestion.id] ? "✓ Passed Trap" : "✗ Tricked"}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    playLesson(
+                      {
+                        id: scenarioAudioId,
+                        title: `Exam Q${currentIdx + 1}: ${activeQuestion.domainName}`,
+                        module: "Exam Trap Simulator",
+                        domainId: activeQuestion.domainId,
+                        text: `Scenario ${currentIdx + 1}. ${activeQuestion.scenario}`,
+                      },
+                      { toggleIfSame: true }
+                    )
+                  }
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                    isGlobalPlaying && currentLesson?.id === scenarioAudioId
+                      ? "bg-amber-500 text-slate-950 border-amber-500"
+                      : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  }`}
+                  title="Listen to exam scenario"
+                >
+                  {isGlobalPlaying && currentLesson?.id === scenarioAudioId ? (
+                    <VolumeX className="w-3.5 h-3.5" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isGlobalPlaying && currentLesson?.id === scenarioAudioId ? "Pause" : "Listen"}</span>
+                </button>
+
+                {quizHistory[activeQuestion.id] !== undefined && (
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
+                    quizHistory[activeQuestion.id] 
+                      ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" 
+                      : "bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300"
+                  }`}>
+                    {quizHistory[activeQuestion.id] ? "✓ Passed Trap" : "✗ Tricked"}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Scenario Paragraph */}
@@ -586,9 +623,38 @@ export const TrickQuestionSimulator: React.FC<TrickQuestionSimulatorProps> = ({
 
                 {/* Correct Explanation */}
                 <div className="bg-slate-900/70 p-3.5 border border-slate-800 rounded-lg">
-                  <span className="text-emerald-400 font-bold block text-xs mb-1">
-                    ✓ Why Answer {activeQuestion.correctAnswer} is Correct:
-                  </span>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-emerald-400 font-bold block text-xs">
+                      ✓ Why Answer {activeQuestion.correctAnswer} is Correct:
+                    </span>
+                    <button
+                      onClick={() =>
+                        playLesson(
+                          {
+                            id: explainAudioId,
+                            title: `Trap Breakdown Q${currentIdx + 1}`,
+                            module: "Exam Trap Analysis",
+                            domainId: activeQuestion.domainId,
+                            text: `The exam trap: ${activeQuestion.trickAlert}. Why answer ${activeQuestion.correctAnswer} is correct: ${activeQuestion.correctExplanation}`,
+                          },
+                          { toggleIfSame: true }
+                        )
+                      }
+                      className={`px-2 py-1 rounded border text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
+                        isGlobalPlaying && currentLesson?.id === explainAudioId
+                          ? "bg-amber-500 text-slate-950 border-amber-500"
+                          : "bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+                      }`}
+                      title="Listen to trap breakdown"
+                    >
+                      {isGlobalPlaying && currentLesson?.id === explainAudioId ? (
+                        <VolumeX className="w-3 h-3" />
+                      ) : (
+                        <Volume2 className="w-3 h-3" />
+                      )}
+                      <span>{isGlobalPlaying && currentLesson?.id === explainAudioId ? "Pause" : "Listen"}</span>
+                    </button>
+                  </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
                     {activeQuestion.correctExplanation}
                   </p>

@@ -11,8 +11,10 @@ import {
   Calendar,
   Layers,
   ChevronRight,
-  Database
+  Database,
+  Headphones
 } from "lucide-react";
+import { useAudioLesson } from "../contexts/AudioLessonContext";
 
 interface StorageHubProps {
   studyHistory: { [key: string]: "known" | "review" | null };
@@ -41,6 +43,7 @@ export const StorageHub: React.FC<StorageHubProps> = ({
   const [slotNameInput, setSlotNameInput] = useState("");
   const [notification, setNotification] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const { cacheStats, listenedLessonIds, setIsDrawerOpen, clearAllAudioCache } = useAudioLesson();
 
   // Load save slots from localStorage on mount
   useEffect(() => {
@@ -362,6 +365,43 @@ export const StorageHub: React.FC<StorageHubProps> = ({
               Reset All Progress
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Persistent Audio Memory Vault Status */}
+      <div className="border-t border-slate-100 pt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded bg-amber-50 border border-amber-200/70 text-amber-600 shrink-0">
+            <Headphones className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-xs font-extrabold text-slate-800">
+              Persistent ElevenLabs Audio Vault (IndexedDB v2)
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">
+              {cacheStats.count} cached audio lessons · {(cacheStats.sizeBytes / 1024).toFixed(1)} KB stored offline · {listenedLessonIds.length} lessons completed
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-sm transition-colors cursor-pointer"
+          >
+            Open Audio Library
+          </button>
+          {cacheStats.count > 0 && (
+            <button
+              onClick={async () => {
+                await clearAllAudioCache();
+                triggerToast("Cleared offline audio cache.");
+              }}
+              className="px-3 py-1.5 border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-600 text-[11px] font-bold rounded-sm transition-colors cursor-pointer"
+            >
+              Clear Audio Cache
+            </button>
+          )}
         </div>
       </div>
     </div>

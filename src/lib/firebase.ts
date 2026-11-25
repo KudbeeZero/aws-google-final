@@ -32,8 +32,39 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
 const databaseId = (firebaseConfig as any).firestoreDatabaseId || "ai-studio-awsgoogle-604aa811-c001-435f-9b8a-79bcde52948d";
-export const db = initializeFirestore(app, {}, databaseId);
+let dbInstance: ReturnType<typeof getFirestore>;
+try {
+  dbInstance = initializeFirestore(app, { ignoreUndefinedProperties: true }, databaseId);
+} catch {
+  dbInstance = getFirestore(app, databaseId);
+}
+export const db = dbInstance;
 export const googleProvider = new GoogleAuthProvider();
+
+/**
+ * Recursively strips `undefined` values from objects and arrays so Firestore
+ * setDoc/updateDoc calls never fail with "Unsupported field value: undefined".
+ */
+function sanitizeForFirestore<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (value !== null && typeof value === "object") {
+    if (value instanceof Date) {
+      return value;
+    }
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== undefined) {
+        clean[k] = sanitizeForFirestore(v);
+      }
+    }
+    return clean as T;
+  }
+  return value;
+}
 
 export class FirebaseAuthError extends Error {
   code: string;
@@ -388,7 +419,7 @@ export const saveActiveInterviewSessionState = async (
   const path = `users/${userId}/interviewSessions/${sessionId}`;
   try {
     const docRef = doc(db, "users", userId, "interviewSessions", sessionId);
-    await setDoc(docRef, {
+    const payload = sanitizeForFirestore({
       sessionId,
       status: data.status || "active",
       scenarioId: data.scenarioId || "",
@@ -399,7 +430,8 @@ export const saveActiveInterviewSessionState = async (
       difficultyMode: data.difficultyMode || "Medium",
       updatedAt: new Date().toISOString(),
       createdAt: data.createdAt || new Date().toISOString()
-    }, { merge: true });
+    });
+    await setDoc(docRef, payload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -431,10 +463,11 @@ export const markInterviewSessionCompleted = async (userId: string, sessionId: s
   const path = `users/${userId}/interviewSessions/${sessionId}`;
   try {
     const docRef = doc(db, "users", userId, "interviewSessions", sessionId);
-    await updateDoc(docRef, {
+    await setDoc(docRef, {
+      sessionId,
       status: "completed",
       updatedAt: new Date().toISOString()
-    });
+    }, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -457,14 +490,15 @@ export const saveActiveSocraticSessionState = async (
   const path = `users/${userId}/socraticSessions/${sessionId}`;
   try {
     const docRef = doc(db, "users", userId, "socraticSessions", sessionId);
-    await setDoc(docRef, {
+    const payload = sanitizeForFirestore({
       sessionId,
       status: data.status || "active",
       messages: data.messages || [],
       topic: data.topic || "General Socratic Study",
       updatedAt: new Date().toISOString(),
       createdAt: data.createdAt || new Date().toISOString()
-    }, { merge: true });
+    });
+    await setDoc(docRef, payload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -496,10 +530,11 @@ export const markSocraticSessionCompleted = async (userId: string, sessionId: st
   const path = `users/${userId}/socraticSessions/${sessionId}`;
   try {
     const docRef = doc(db, "users", userId, "socraticSessions", sessionId);
-    await updateDoc(docRef, {
+    await setDoc(docRef, {
+      sessionId,
       status: "completed",
       updatedAt: new Date().toISOString()
-    });
+    }, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -567,7 +602,7 @@ export const syncStreakToLeaderboard = async (
   // 2. Sync to Firebase Firestore with 1.5s timeout
   try {
     const leaderDocRef = doc(db, "leaderboard", userId);
-    await withTimeout(setDoc(leaderDocRef, payload, { merge: true }), 1500, null);
+    await withTimeout(setDoc(leaderDocRef, sanitizeForFirestore(payload), { merge: true }), 1500, null);
     console.log("Synced streak to Firestore leaderboard:", streak);
   } catch (error) {
     console.warn("Firestore leaderboard sync skipped or failed:", error);

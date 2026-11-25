@@ -28,6 +28,7 @@ import {
   awardLootCrate,
   getGamificationProfile 
 } from "../services/gamificationService";
+import { useAudioLesson } from "../contexts/AudioLessonContext";
 
 interface Scenario {
   id: string;
@@ -185,6 +186,7 @@ export const ScenarioMatcher: React.FC = () => {
   const [lifelinesUsedCount, setLifelinesUsedCount] = useState<number>(0);
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
   const [responseTimes, setResponseTimes] = useState<number[]>([]);
+  const { playLesson, currentLesson, isPlaying: isGlobalPlaying } = useAudioLesson();
 
   const currentScenario = GAME_SCENARIOS[currentIdx];
 
@@ -658,13 +660,42 @@ export const ScenarioMatcher: React.FC = () => {
           className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden"
         >
           {/* Header */}
-          <div className="bg-slate-50/60 dark:bg-slate-800/60 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="bg-slate-50/60 dark:bg-slate-800/60 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold text-slate-400 font-mono uppercase tracking-widest">
               Scenario #{currentIdx + 1}
             </span>
-            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-400 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-900">
-              {currentScenario.domainId.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() =>
+                  playLesson(
+                    {
+                      id: `matcher-${currentScenario.id}`,
+                      title: `Scenario Match #${currentIdx + 1}`,
+                      module: "Scenario Matcher",
+                      domainId: currentScenario.domainId,
+                      text: currentScenario.scenarioText,
+                    },
+                    { toggleIfSame: true }
+                  )
+                }
+                className={`px-2.5 py-1 rounded-md border text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors ${
+                  isGlobalPlaying && currentLesson?.id === `matcher-${currentScenario.id}`
+                    ? "bg-amber-500 text-slate-950 border-amber-500"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+                }`}
+                title="Listen to scenario"
+              >
+                {isGlobalPlaying && currentLesson?.id === `matcher-${currentScenario.id}` ? (
+                  <VolumeX className="w-3.5 h-3.5" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5" />
+                )}
+                <span>Listen</span>
+              </button>
+              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-400 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-900">
+                {currentScenario.domainId.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
+              </span>
+            </div>
           </div>
 
           {/* Scenario Text */}

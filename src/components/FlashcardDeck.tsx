@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   Copy, Check, RefreshCw, ChevronLeft, ChevronRight, Award, Trash2, 
   Flame, Star, Volume2, VolumeX, Shuffle, Search, Plus, X, 
-  Grid, CreditCard, Sparkles, Filter, Eye, EyeOff, BookOpen, Layers
+  Grid, CreditCard, Sparkles, Filter, Eye, EyeOff, BookOpen, Layers, Headphones, Download
 } from "lucide-react";
 import { Flashcard, DomainData } from "../types";
 import { ParticleEffect } from "./ParticleEffect";
 import { InteractiveKnowledgeCheck } from "./InteractiveKnowledgeCheck";
+import { useAudioLesson } from "../contexts/AudioLessonContext";
 
 interface FlashcardDeckProps {
   flashcards: Flashcard[];
@@ -48,12 +49,20 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [viewMode, setViewMode] = useState<"deck" | "grid" | "code">("deck");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState(false);
   const [expandedGridCards, setExpandedGridCards] = useState<{ [key: string]: boolean }>({});
   const [particles, setParticles] = useState<{ id: string; x: number; y: number }[]>([]);
+  const {
+    playLesson,
+    playQueue,
+    precacheLessons,
+    currentLesson,
+    isPlaying: isGlobalPlaying,
+    isLoading: isGlobalAudioLoading,
+    precacheProgress,
+  } = useAudioLesson();
 
   // Modal form state
   const [newQuestion, setNewQuestion] = useState("");
@@ -123,35 +132,54 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   const reviewPercent = allCards.length > 0 ? Math.round((reviewPoolCount / allCards.length) * 100) : 0;
   const unstudiedPercent = Math.max(0, 100 - (masteryPercent + reviewPercent));
 
-  // Speech synthesis
+  const activeCardLessonId = activeCard ? `fc-${activeCard.id}-${isFlipped ? "a" : "q"}` : "";
+  const isSpeaking = Boolean(
+    activeCard &&
+      (isGlobalPlaying || isGlobalAudioLoading) &&
+      (currentLesson?.id === activeCardLessonId || currentLesson?.id === `fc-full-${activeCard.id}`)
+  );
+
+  // Persistent ElevenLabs + IndexedDB audio narration
   const handleToggleSpeech = useCallback(() => {
     if (!activeCard) return;
-    if ("speechSynthesis" in window) {
-      if (isSpeaking) {
-        window.speechSynthesis.cancel();
-        setIsSpeaking(false);
-      } else {
-        window.speechSynthesis.cancel();
-        const textToSpeak = isFlipped 
-          ? `Answer: ${activeCard.answer}`
-          : `Question: ${activeCard.question}`;
-        const utterance = new SpeechSynthesisUtterance(textToSpeak);
-        utterance.rate = 0.95;
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-        setIsSpeaking(true);
-        window.speechSynthesis.speak(utterance);
-      }
-    }
-  }, [activeCard, isFlipped, isSpeaking]);
+    const textToSpeak = isFlipped
+      ? `Answer: ${activeCard.answer}`
+      : `Question: ${activeCard.question}`;
+    playLesson(
+      {
+        id: `fc-${activeCard.id}-${isFlipped ? "a" : "q"}`,
+        title: `${isFlipped ? "Answer" : "Question"}: ${activeCard.question.slice(0, 52)}`,
+        module: "Flashcards",
+        domainId: activeCard.domainId,
+        text: textToSpeak,
+      },
+      { toggleIfSame: true }
+    );
+  }, [activeCard, isFlipped, playLesson]);
 
-  // Cancel speech on card switch
-  useEffect(() => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
-  }, [currentIdx, isFlipped]);
+  const handleListenDeck = useCallback(() => {
+    if (filteredCards.length === 0) return;
+    const lessons = filteredCards.map((fc, i) => ({
+      id: `fc-full-${fc.id}`,
+      title: `Card ${i + 1}: ${fc.question.slice(0, 50)}`,
+      module: "Flashcards Commute Mode",
+      domainId: fc.domainId,
+      text: `Question: ${fc.question}. Official Answer: ${fc.answer}`,
+    }));
+    playQueue(lessons, Math.min(currentIdx, lessons.length - 1));
+  }, [filteredCards, currentIdx, playQueue]);
+
+  const handleCacheFilteredDeck = useCallback(() => {
+    if (filteredCards.length === 0) return;
+    const sample = filteredCards.slice(0, 20).map((fc, i) => ({
+      id: `fc-full-${fc.id}`,
+      title: `Card ${i + 1}: ${fc.question.slice(0, 50)}`,
+      module: "Flashcards Offline Pack",
+      domainId: fc.domainId,
+      text: `Question: ${fc.question}. Official Answer: ${fc.answer}`,
+    }));
+    precacheLessons(sample, `${sample.length} Flashcards`);
+  }, [filteredCards, precacheLessons]);
 
   // Card navigation
   const nextCard = useCallback(() => {
@@ -299,44 +327,62 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
     <div className="space-y-6 animate-fade-in pb-12">
       
       {/* Top Banner & Mastery Analytics */}
-      <div className="bg-white border border-slate-200 p-5 shadow-xs rounded-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-150">
-          <div>
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-amber-500" />
-              <h2 className="text-base font-black text-slate-900 tracking-tight">
-                AWS CLF-C02 Flashcards Engine
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs rounded-2xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+              <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
+                Flashcards Engine
               </h2>
-              <span className="text-[10px] font-mono font-bold bg-slate-900 text-white px-2 py-0.5 rounded-xs">
-                {allCards.length} Total Cards
+              <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+                · {allCards.length} cards
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Interactive 3D active-recall deck with spaced repetition and hotkeys.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              3D active-recall deck with spaced repetition and continuous audio mode.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start md:self-auto">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 sm:flex-wrap shrink-0">
+            <button
+              onClick={handleListenDeck}
+              disabled={filteredCards.length === 0}
+              className="px-3 py-1.5 bg-slate-900 dark:bg-amber-500 hover:opacity-90 text-amber-400 dark:text-slate-950 text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap shrink-0"
+              title="Listen continuously to filtered flashcards"
+            >
+              <Headphones className="w-3.5 h-3.5" /> Listen Deck
+            </button>
+
+            <button
+              onClick={handleCacheFilteredDeck}
+              disabled={filteredCards.length === 0 || Boolean(precacheProgress?.active)}
+              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap shrink-0"
+              title="Cache up to 20 flashcards offline in IndexedDB"
+            >
+              <Download className="w-3.5 h-3.5" /> Cache
+            </button>
+
             <button
               onClick={() => setShowKnowledgeCheck(true)}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-sm shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0"
             >
-              <Award className="w-3.5 h-3.5" /> Knowledge Check
+              <Award className="w-3.5 h-3.5" /> Quiz
             </button>
 
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-sm shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0"
             >
-              <Plus className="w-3.5 h-3.5" /> Add Flashcard
+              <Plus className="w-3.5 h-3.5" /> Add
             </button>
 
             <button
               onClick={onResetStudyHistory}
-              className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-sm transition-all flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-slate-200 dark:border-slate-700 rounded-xl transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
               title="Reset study statistics"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Reset Stats
+              <Trash2 className="w-3.5 h-3.5" /> Reset
             </button>
           </div>
         </div>
@@ -344,18 +390,18 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
         {/* Live Segmented Progress Bar */}
         <div className="pt-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
           <div className="md:col-span-8 space-y-1.5">
-            <div className="flex justify-between text-[11px] font-bold">
-              <span className="text-slate-700 flex items-center gap-1.5">
+            <div className="flex flex-wrap justify-between gap-1 text-[11px] font-semibold">
+              <span className="text-slate-700 dark:text-slate-200 flex items-center gap-1.5 tabular-nums">
                 <Star className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
-                Exam Readiness Progress ({masteryPercent}% Mastered)
+                {masteryPercent}% Mastered
               </span>
-              <span className="text-slate-500 font-mono">
-                {knownCount} Mastered • {reviewPoolCount} Review • {unstudiedCount} Unstudied
+              <span className="text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+                {knownCount} Known · {reviewPoolCount} Review · {unstudiedCount} New
               </span>
             </div>
 
             {/* Segmented Bar */}
-            <div className="h-3 w-full bg-slate-100 rounded-xs overflow-hidden flex border border-slate-200">
+            <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex border border-slate-200/70 dark:border-slate-700">
               <div 
                 style={{ width: `${masteryPercent}%` }} 
                 className="bg-emerald-500 transition-all duration-500" 
@@ -368,20 +414,20 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
               />
               <div 
                 style={{ width: `${unstudiedPercent}%` }} 
-                className="bg-slate-200 transition-all duration-500" 
+                className="bg-slate-200 dark:bg-slate-700 transition-all duration-500" 
                 title={`${unstudiedCount} Unstudied (${unstudiedPercent}%)`}
               />
             </div>
           </div>
 
           {/* View Mode Toggle Buttons */}
-          <div className="md:col-span-4 flex items-center justify-end gap-1">
+          <div className="md:col-span-4 flex items-center justify-start md:justify-end gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit">
             <button
               onClick={() => setViewMode("deck")}
-              className={`px-3 py-1.5 text-xs font-bold rounded-sm border flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
                 viewMode === "deck"
-                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               <CreditCard className="w-3.5 h-3.5" /> 3D Deck
@@ -389,10 +435,10 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
 
             <button
               onClick={() => setViewMode("grid")}
-              className={`px-3 py-1.5 text-xs font-bold rounded-sm border flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
                 viewMode === "grid"
-                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               <Grid className="w-3.5 h-3.5" /> Cheat Sheet
@@ -400,35 +446,31 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
 
             <button
               onClick={() => setViewMode("code")}
-              className={`px-3 py-1.5 text-xs font-bold rounded-sm border flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
                 viewMode === "code"
-                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <Copy className="w-3.5 h-3.5" /> Python Code
+              <Copy className="w-3.5 h-3.5" /> Code
             </button>
           </div>
         </div>
       </div>
 
       {/* Scope Controls & Search Bar */}
-      <div className="bg-white p-4 border border-slate-200 shadow-xs space-y-3">
-        {/* Domain Scope Selector */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mr-1">
-            Domain:
-          </span>
-
+      <div className="bg-white dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs space-y-3">
+        {/* Domain Scope Selector (Single-line horizontal scroller on mobile) */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 sm:flex-wrap">
           <button
             onClick={() => setSelectedDomain("all")}
-            className={`px-3 py-1 text-xs font-bold rounded-sm transition-all border ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all border whitespace-nowrap shrink-0 cursor-pointer ${
               selectedDomain === "all"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                ? "bg-slate-900 dark:bg-white text-white dark:text-slate-950 border-slate-900 dark:border-white"
+                : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
             }`}
           >
-            All Cards ({allCards.length})
+            All ({allCards.length})
           </button>
 
           {domains.map((dom) => {
@@ -437,10 +479,10 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
               <button
                 key={dom.id}
                 onClick={() => setSelectedDomain(dom.id)}
-                className={`px-3 py-1 text-xs font-bold rounded-sm transition-all border ${
+                className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all border whitespace-nowrap shrink-0 cursor-pointer ${
                   selectedDomain === dom.id
                     ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
                 }`}
               >
                 Domain {dom.number} ({count})
@@ -450,32 +492,32 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
 
           <button
             onClick={() => setSelectedDomain("review-pool")}
-            className={`px-3 py-1 text-xs font-bold rounded-sm transition-all border flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all border flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               selectedDomain === "review-pool"
                 ? "bg-amber-600 text-white border-amber-600 shadow-xs"
-                : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/60 hover:bg-amber-100"
             }`}
           >
             <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-            Review Pool ({reviewPoolCount})
+            Review ({reviewPoolCount})
           </button>
         </div>
 
         {/* Search & Status Filters Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search flashcards (e.g. S3, EC2, IAM, Cost)..."
+              placeholder="Search flashcards (S3, EC2, IAM, Cost)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-sm text-xs font-medium focus:bg-white focus:outline-none focus:border-blue-500 transition-all"
+              className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:border-blue-500 transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -483,26 +525,25 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-[11px] font-bold text-slate-500">Status:</span>
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 hidden xs:block" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 px-2.5 py-1.5 rounded-sm focus:outline-none focus:border-blue-500 cursor-pointer"
+              className="flex-1 sm:flex-initial bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 px-3 py-2 rounded-xl focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               <option value="all">All Statuses</option>
               <option value="unstudied">Unstudied Only</option>
-              <option value="known">Mastered (★) Only</option>
-              <option value="review">Needs Review (⟲) Only</option>
+              <option value="known">Mastered Only</option>
+              <option value="review">Needs Review</option>
             </select>
 
             <button
               onClick={handleShuffle}
               disabled={filteredCards.length <= 1}
-              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold rounded-sm border border-slate-200 flex items-center gap-1 transition-all cursor-pointer"
+              className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0"
               title="Shuffle card deck"
             >
-              <Shuffle className="w-3.5 h-3.5 text-slate-600" /> Shuffle
+              <Shuffle className="w-3.5 h-3.5" /> Shuffle
             </button>
           </div>
         </div>
@@ -768,15 +809,40 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
                     )}
                   </div>
 
-                  {card.id.startsWith("custom-") && (
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={(e) => handleDeleteCustomCard(card.id, e)}
-                      className="text-slate-400 hover:text-red-600 transition-colors p-1"
-                      title="Delete custom card"
+                      onClick={() =>
+                        playLesson(
+                          {
+                            id: `fc-full-${card.id}`,
+                            title: card.question.slice(0, 56),
+                            module: "Flashcard Cheat Sheet",
+                            domainId: card.domainId,
+                            text: `Question: ${card.question}. Answer: ${card.answer}`,
+                          },
+                          { toggleIfSame: true }
+                        )
+                      }
+                      className={`p-1.5 rounded transition-colors cursor-pointer ${
+                        isGlobalPlaying && currentLesson?.id === `fc-full-${card.id}`
+                          ? "bg-amber-500 text-slate-950"
+                          : "text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                      }`}
+                      title="Listen to flashcard"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Volume2 className="w-3.5 h-3.5" />
                     </button>
-                  )}
+
+                    {card.id.startsWith("custom-") && (
+                      <button
+                        onClick={(e) => handleDeleteCustomCard(card.id, e)}
+                        className="text-slate-400 hover:text-red-600 transition-colors p-1"
+                        title="Delete custom card"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>

@@ -65,6 +65,8 @@ import {
   SwarmBounty,
   RARITY_COLORS
 } from "../services/gamificationService";
+import { useAgentWorkforce } from "../contexts/AgentWorkforceContext";
+import { AWS_SIX_PILLARS } from "../types/workforce";
 
 export interface WorkflowNode {
   id: string;
@@ -177,6 +179,28 @@ const DEFAULT_AGENTS: Agent[] = [
     focus: "Active Recall, Flashcards & Encouragement",
     description: "Your synthetic study partner. Explains concepts in plain English, tests your recall, and keeps you motivated.",
     badge: "Peer Study"
+  },
+  {
+    id: "ag-6",
+    name: "OpsPulse",
+    role: "Operational Excellence & SRE Lead",
+    avatarBg: "bg-gradient-to-tr from-sky-600 to-indigo-600",
+    emoji: "⚙️",
+    status: "idle",
+    focus: "CloudFormation IaC, Config Auto-Remediation & CloudWatch",
+    description: "Coaches Operations as Code, frequent reversible deployments, and automated compliance guardrails across CLF-C02 & SAA-C03.",
+    badge: "Ops Excellence"
+  },
+  {
+    id: "ag-7",
+    name: "EcoScale",
+    role: "Performance & Sustainability Architect",
+    avatarBg: "bg-gradient-to-tr from-teal-600 to-emerald-600",
+    emoji: "🌱",
+    status: "idle",
+    focus: "Graviton Silicon, CloudFront Edge, DAX & Carbon Efficiency",
+    description: "Balances microsecond latency against energy-efficient Graviton compute and Sustainability IN the cloud.",
+    badge: "Perf & Green"
   }
 ];
 
@@ -391,6 +415,7 @@ interface AgentSwarmHubProps {
 }
 
 export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode }) => {
+  const { activeCertTrack, memory: workforceMemory, setIsMeshSheetOpen, triggerPillarBubble } = useAgentWorkforce();
   const [agents, setAgents] = useState<Agent[]>(DEFAULT_AGENTS);
   const [selectedAgent, setSelectedAgent] = useState<Agent>(DEFAULT_AGENTS[0]);
   const [agentNotes, setAgentNotes] = useState<AgentNote[]>(() => {
@@ -965,6 +990,44 @@ export const AgentSwarmHub: React.FC<AgentSwarmHubProps> = ({ user, aiModelMode 
                 Run Swarm Diagnostics
               </>
             )}
+          </button>
+        </div>
+      </div>
+
+      {/* Unified Cross-Aware Workforce Memory & 6 AWS Well-Architected Pillars Sync Bar */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="space-y-1 min-w-0">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-[#FF9900]">Unified Shared Memory Active</span>
+            <span aria-hidden="true">·</span>
+            <span>Track: {activeCertTrack}</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-mono tabular-nums">{workforceMemory.recentEvents.length} cross-module events</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-mono tabular-nums">{workforceMemory.handoffs.filter((h) => !h.resolved).length} open handoffs</span>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            All 7 agents read and write the same PostgreSQL-synced learner graph across Flashcards, Exam Simulator, Multi-Cert Question Bank, and Visual Architecture.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {AWS_SIX_PILLARS.slice(0, 3).map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => triggerPillarBubble(p.id)}
+              className="min-h-[38px] px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-200 cursor-pointer whitespace-nowrap"
+            >
+              {p.shortName} · <span className="font-mono tabular-nums">{workforceMemory.pillarScores[p.id]?.score ?? 55}%</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setIsMeshSheetOpen(true)}
+            className="min-h-[38px] px-3.5 rounded-lg bg-slate-900 dark:bg-[#FF9900] text-white dark:text-slate-950 text-xs font-bold cursor-pointer whitespace-nowrap"
+          >
+            Open Live Handoffs
           </button>
         </div>
       </div>

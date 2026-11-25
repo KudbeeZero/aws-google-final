@@ -19,8 +19,19 @@ import { AgentSwarmHub } from "./components/AgentSwarmHub";
 import { VisualArchitectureLearning } from "./components/VisualArchitectureLearning";
 import { LightningRushArena } from "./components/LightningRushArena";
 import { NewAgeSlotMachine } from "./components/NewAgeSlotMachine";
+import { BlueprintLessonView } from "./components/BlueprintLessonView";
 import { calculateComprehensiveReadiness, ExamConfidenceReport } from "./services/readinessService";
 import { ExamPassingConfidenceModal } from "./components/ExamPassingConfidenceModal";
+import { GlobalAudioPlayer } from "./components/GlobalAudioPlayer";
+import { AIAudioTourStudio } from "./components/AIAudioTourStudio";
+import { AIQuestionBankView } from "./components/AIQuestionBankView";
+import { MobileAgentBubbles } from "./components/MobileAgentBubbles";
+import { useAudioLesson } from "./contexts/AudioLessonContext";
+import { useAgentWorkforce } from "./contexts/AgentWorkforceContext";
+import { PWAInstallButton } from "./components/PWAInstallButton";
+import { OfflineIndicator } from "./components/OfflineIndicator";
+import { CommandPalette } from "./components/CommandPalette";
+import { triggerHaptic, getHapticsEnabled, setHapticsEnabled } from "./utils/haptics";
 import { getOfflineHtmlString } from "./utils/offlineTemplate";
 import { 
   GraduationCap, 
@@ -56,7 +67,14 @@ import {
   ArrowRight,
   MoreHorizontal,
   Crown,
-  Coins
+  Coins,
+  Search,
+  Volume2,
+  VolumeX,
+  Headphones,
+  Radio,
+  Building2,
+  ChevronRight
 } from "lucide-react";
 import { 
   auth, 
@@ -78,9 +96,25 @@ export default function App() {
   const [showQuickStartGuide, setShowQuickStartGuide] = useState<boolean>(false);
   const [showDeployGuide, setShowDeployGuide] = useState<boolean>(false);
   const [showExamConfidenceModal, setShowExamConfidenceModal] = useState<boolean>(false);
+  const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
+  const [hapticsOn, setHapticsOn] = useState<boolean>(() => getHapticsEnabled());
   const [quickStartStep, setQuickStartStep] = useState<number>(1);
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState<boolean>(false);
   const mainRef = React.useRef<HTMLElement>(null);
+  const { setIsDrawerOpen, isPlaying: isAudioPlaying, cacheStats, isTourModalOpen, setIsTourModalOpen } = useAudioLesson();
+  const { activeCertTrack, memory: workforceMemory, dispatchStudyEvent } = useAgentWorkforce();
+
+  useEffect(() => {
+    const handleGlobalKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        triggerHaptic("light");
+        setShowCommandPalette((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKey);
+    return () => window.removeEventListener("keydown", handleGlobalKey);
+  }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -386,6 +420,7 @@ export default function App() {
 
   // Responsive tab changer
   const handleTabChange = (tab: string, domainId: string = "all") => {
+    triggerHaptic("light");
     setActiveTab(tab);
     setShowMobileMoreMenu(false);
     if (tab === "flashcards" || tab === "dashboard") {
@@ -617,12 +652,21 @@ export default function App() {
     setTodayStudyMinutes(0);
   };
 
-  // Handle flashcard feedback
+  // Handle flashcard feedback + dispatch into Cross-Aware AI Agent Workforce
   const handleMarkCard = (cardId: string, status: "known" | "review") => {
     setStudyHistory((prev) => ({
       ...prev,
       [cardId]: status,
     }));
+    const card = initialFlashcards.find((c) => c.id === cardId);
+    if (card) {
+      dispatchStudyEvent({
+        sourceTab: "flashcards",
+        domainId: card.domainId,
+        topic: card.question.slice(0, 72),
+        outcome: status === "known" ? "mastered" : "review",
+      });
+    }
   };
 
   // Reset study statistics
@@ -632,12 +676,21 @@ export default function App() {
     }
   };
 
-  // Handle quiz submission
+  // Handle quiz submission + dispatch into Cross-Aware AI Agent Workforce
   const handleRecordQuizResult = (questionId: string, isCorrect: boolean) => {
     setQuizHistory((prev) => ({
       ...prev,
       [questionId]: isCorrect,
     }));
+    const q = trickQuestions.find((item) => item.id === questionId);
+    if (q) {
+      dispatchStudyEvent({
+        sourceTab: "simulator",
+        domainId: q.domainId,
+        topic: q.scenario.slice(0, 72),
+        outcome: isCorrect ? "correct" : "incorrect",
+      });
+    }
   };
 
   // Reset quiz history
@@ -676,307 +729,402 @@ export default function App() {
     trickQuestions,
     quizHistory,
     totalStudyMinutes,
-    streak
+    streak,
+    activeCertTrack,
+    workforceMemory
   );
   const readinessScore = readinessReport.readinessScore;
 
+  const mobileTabLabels: Record<string, string> = {
+    dashboard: "CloudMaster",
+    "question-bank": `${activeCertTrack} Bank`,
+    flashcards: "Flashcards",
+    simulator: "Exam Prep",
+    professor: "AI Tutor",
+    "blueprint-lesson": "Blueprint Lesson",
+    "visual-architecture": "Architecture",
+    vault: "Distractor Vault",
+    matching: "Scenario Match",
+    "lightning-rush": "Lightning Blitz",
+    slots: "Slot Machine",
+    interview: "Interview Prep",
+    agents: "Agent Swarm",
+    backup: "Save & Backup",
+    algorand: "Web3 Portal",
+  };
+
   return (
-    <div className={`bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen w-full flex flex-col overflow-hidden font-sans ${darkMode ? "dark" : ""}`}>
+    <div className={`bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-[100dvh] w-full flex flex-col overflow-hidden font-sans ${darkMode ? "dark" : ""}`}>
       
-      {/* Top Navigation / Header */}
+      {/* Top Navigation / Header (Apple HIG Frosted Glass — All Menu Icons Visible on iPhone Vertical) */}
       <header 
-        className="border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 bg-white dark:bg-slate-900 shrink-0 z-20 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pb-4"
+        className="border-b border-slate-200/80 dark:border-slate-800/80 flex flex-col md:flex-row md:items-center md:justify-between gap-1.5 md:gap-4 px-3 sm:px-6 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shrink-0 z-20 pt-[max(0.45rem,env(safe-area-inset-top))] pb-1.5 md:pt-[max(0.75rem,env(safe-area-inset-top))] md:pb-3 relative"
       >
-        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
-          <button 
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-sm shrink-0"
-            title="Toggle Sidebar Menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          
-          <div className="w-8 h-8 bg-slate-900 dark:bg-slate-950 flex items-center justify-center rounded-sm font-black text-[#FF9900] text-xs border border-slate-800 dark:border-slate-900 shrink-0">
-            AWS
+        {/* Row 1 (Mobile) / Left+Right Main Bar (Desktop) */}
+        <div className="flex items-center justify-between gap-2 w-full md:w-auto md:flex-1 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button 
+              onClick={() => {
+                triggerHaptic("light");
+                setSidebarOpen(!sidebarOpen);
+              }}
+              className="inline-flex items-center justify-center min-w-[38px] min-h-[38px] md:min-w-0 md:min-h-0 p-2 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white bg-slate-100/80 md:bg-transparent dark:bg-slate-800/80 md:dark:bg-transparent hover:bg-slate-200/80 dark:hover:bg-slate-800 rounded-xl shrink-0 transition-colors cursor-pointer"
+              title="Toggle Sidebar Menu"
+              aria-label="Toggle navigation sidebar"
+            >
+              <Menu className="w-5 h-5 shrink-0" />
+            </button>
+            
+            <img
+              src="/apple-touch-icon.png"
+              alt="CloudMaster"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl border border-slate-200/60 dark:border-slate-700/60 shadow-xs shrink-0 object-cover"
+            />
+            <span className="md:hidden font-display font-bold tracking-tight text-sm text-slate-900 dark:text-white truncate">
+              {mobileTabLabels[activeTab] || "CloudMaster"}
+            </span>
+            <span className="hidden md:inline font-display font-bold tracking-tight text-base text-slate-900 dark:text-white whitespace-nowrap shrink-0">
+              CloudMaster
+            </span>
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="font-extrabold tracking-tight text-[11px] sm:text-xs md:text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1 leading-none truncate">
-              CLF-C02 STUDY COMPANION <GraduationCap className="w-3.5 h-3.5 text-amber-500 shrink-0 hidden xs:inline" />
-            </span>
-            <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold tracking-wide truncate hidden md:block">
-              Solutions Architect Interactive Training Suite
-            </span>
-          </div>
-        </div>
 
-        {/* Global Progress Indicators */}
-        <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0 min-w-0">
-          <button 
-            onClick={() => setShowExamConfidenceModal(true)}
-            className="flex flex-col items-end shrink-0 hover:opacity-80 transition-opacity cursor-pointer text-right group"
-            title="Click to Open Exam Passing Confidence Hub"
-          >
-            <span className="text-[8px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold leading-none hidden sm:block group-hover:text-amber-500 transition-colors">
-              Ready Score 📊
-            </span>
-            <span className="text-[10px] sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
-              <span className="sm:hidden text-slate-400 text-[8px] font-bold">RDY:</span> {readinessScore}% 
-              <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${readinessScore >= 80 ? 'bg-emerald-500' : readinessScore >= 40 ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
-            </span>
-          </button>
-          
-          <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 hidden xs:block"></div>
+          {/* Right Status & Account Actions (Always Visible on Mobile Row 1 & Full Desktop Bar) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 min-w-0">
+            {/* Desktop-only inline quick-action buttons (mobile gets dedicated full-width Row 2 strip below) */}
+            <button
+              onClick={() => {
+                triggerHaptic("light");
+                setIsTourModalOpen(true);
+              }}
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer border shrink-0 bg-amber-500/12 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30"
+              title="AI Guided Audio Tour, Dual-Host Podcasts & Voice Ask"
+              aria-label="Open AI Audio Tour & Podcasts"
+            >
+              <Radio className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+              <span className="whitespace-nowrap">AI Tour</span>
+            </button>
 
-          <div className={`px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-bold rounded-full border flex items-center gap-1 sm:gap-1.5 shrink-0 transition-all ${
-            streak >= 7 
-              ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/30' 
-              : streak >= 3 
-                ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-900/30' 
-                : 'bg-slate-50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
-          }`}>
-            <Flame className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${
-              streak >= 7 
-                ? 'text-rose-500 fill-rose-500 animate-bounce' 
-                : streak >= 3 
-                  ? 'text-amber-500 fill-amber-500 animate-pulse' 
-                  : 'text-slate-400 dark:text-slate-500'
-            }`} />
-            <span className="uppercase tracking-wider">
-              <span className="hidden sm:inline">
-                {streak >= 7 ? `7-Day Supernova (${streak}d)` : streak >= 3 ? `3-Day Burner (${streak}d)` : `${streak} Day Streak`}
+            <button
+              onClick={() => {
+                triggerHaptic("light");
+                setIsDrawerOpen(true);
+              }}
+              className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer border shrink-0 ${
+                isAudioPlaying
+                  ? "bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400"
+                  : "bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-slate-700/70"
+              }`}
+              title="Audio Study Studio & Offline Memory"
+              aria-label="Open Audio Study Studio"
+            >
+              <Headphones className={`w-3.5 h-3.5 shrink-0 ${isAudioPlaying ? "text-amber-500" : ""}`} />
+              <span className="hidden lg:inline whitespace-nowrap">Audio</span>
+              {cacheStats.count > 0 && (
+                <span className="hidden xl:inline text-[10px] font-mono text-slate-400 tabular-nums">
+                  {cacheStats.count}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                triggerHaptic("light");
+                setShowCommandPalette(true);
+              }}
+              className="hidden md:flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium transition-colors cursor-pointer border border-slate-200/70 dark:border-slate-700/70 shrink-0"
+              title="Spotlight Quick Jump (⌘K)"
+              aria-label="Open Quick Search"
+            >
+              <Search className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Quick Jump</span>
+              <kbd className="hidden lg:inline-block text-[10px] font-mono text-slate-400 dark:text-slate-500">⌘K</kbd>
+            </button>
+
+            <button 
+              onClick={() => {
+                triggerHaptic("light");
+                setShowExamConfidenceModal(true);
+              }}
+              className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-700/70 transition-colors cursor-pointer shrink-0 tabular-nums"
+              title="Open Exam Passing Confidence Hub"
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${readinessScore >= 80 ? 'bg-emerald-500' : readinessScore >= 40 ? 'bg-amber-500' : 'bg-slate-400'}`} />
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                {readinessScore}% <span className="hidden sm:inline font-medium text-slate-500 dark:text-slate-400">Ready</span>
               </span>
-              <span className="sm:hidden inline">
-                {streak}d
-              </span>
-            </span>
-          </div>
+            </button>
 
-          <button
-            onClick={() => setShowQuickStartGuide(true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] sm:text-xs font-black rounded-full border border-amber-500/30 transition-all shadow-xs cursor-pointer shrink-0"
-            title="Interactive 10-Minute Rapid Onboarding Tour"
-          >
-            <Compass className="w-3.5 h-3.5 text-amber-500" />
-            <span className="hidden sm:inline">10-MIN GUIDE</span>
-          </button>
+            <div
+              className={`flex px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-xl items-center gap-1 shrink-0 tabular-nums ${
+                streak >= 3
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                  : 'bg-slate-100/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300'
+              }`}
+              title={`${streak} Day Study Streak`}
+            >
+              <Flame className={`w-3.5 h-3.5 shrink-0 ${streak >= 7 ? 'text-rose-500 fill-rose-500' : streak >= 3 ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+              <span className="whitespace-nowrap">{streak}d</span>
+            </div>
 
-          <button
-            onClick={() => setShowDeployGuide(true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-[10px] sm:text-xs font-black rounded-full border border-cyan-500/30 transition-all shadow-xs cursor-pointer shrink-0"
-            title="Cloud Run & Cloudflare Deployment Guide"
-          >
-            <Rocket className="w-3.5 h-3.5 text-cyan-500" />
-            <span className="hidden md:inline">DEPLOY</span>
-          </button>
+            <div className="hidden md:block">
+              <PWAInstallButton variant="compact" />
+            </div>
 
-          <button
-            onClick={handleDownloadOfflineCompanion}
-            className="hidden lg:flex items-center gap-1 px-2.5 py-1 bg-[#FF9900]/10 hover:bg-[#FF9900]/20 text-[#FF9900] text-[10px] sm:text-xs font-black rounded-full border border-[#FF9900]/30 transition-all shadow-sm cursor-pointer shrink-0"
-            title="Download Single-File Standalone HTML Version"
-          >
-            <Download className="w-3 h-3" />
-            <span className="hidden lg:inline">OFFLINE (.HTML)</span>
-          </button>
-
-          <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 hidden md:block"></div>
-
-          {/* User Account / Sync status */}
-          {authLoading ? (
-            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse border border-slate-200 dark:border-slate-750 shrink-0" />
-          ) : user ? (
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* Cloud Sync Status Indicator */}
-              <div className="flex items-center gap-2 mr-1 relative">
-                <div 
-                  onClick={() => {
-                    setShowSyncStatsPanel(!showSyncStatsPanel);
-                    if (!showSyncStatsPanel) {
-                      measurePingLatency();
-                    }
-                  }}
-                  className="hidden sm:flex flex-col items-end cursor-pointer hover:opacity-85 select-none"
-                  title="Click to view Cloud Database Diagnostics & Connection Telemetry"
-                >
-                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                    {syncing ? 'Syncing to Cloud...' : isOffline ? 'Offline Mode' : 'Cloud Synchronized'}
-                    <span className={`w-1.5 h-1.5 rounded-full ${syncing ? 'bg-amber-400 animate-ping' : isOffline ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                    {lastSyncTime ? `Last saved: ${lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Waiting for sync...'}
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-1">
-                  {!isOffline && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleForceSync();
-                      }}
-                      disabled={syncing}
-                      title="Force immediate cloud sync"
-                      className="hidden sm:flex items-center justify-center p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin text-[#FF9900]' : ''}`} />
-                    </button>
-                  )}
-                  
-                  <span 
+            {/* User Account / Sync status */}
+            {authLoading ? (
+              <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse border border-slate-200 dark:border-slate-750 shrink-0" />
+            ) : user ? (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Cloud Sync Status Indicator (Desktop) */}
+                <div className="hidden md:flex items-center gap-2 mr-1 relative">
+                  <div 
                     onClick={() => {
                       setShowSyncStatsPanel(!showSyncStatsPanel);
                       if (!showSyncStatsPanel) {
                         measurePingLatency();
                       }
                     }}
-                    className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 relative cursor-pointer shrink-0"
-                    title="Toggle Cloud Health Dashboard"
+                    className="flex flex-col items-end cursor-pointer hover:opacity-85 select-none"
+                    title="Click to view Cloud Database Diagnostics & Connection Telemetry"
                   >
-                    {isOffline ? (
-                      <CloudLightning className="w-4 h-4 text-red-500" />
-                    ) : (
-                      <CloudLightning className={`w-4 h-4 ${syncing ? 'text-[#FF9900] animate-bounce' : 'text-emerald-500'}`} />
+                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      {syncing ? 'Syncing…' : isOffline ? 'Offline' : 'Synced'}
+                      <span className={`w-1.5 h-1.5 rounded-full ${syncing ? 'bg-amber-400' : isOffline ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 tabular-nums">
+                      {lastSyncTime ? lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Waiting…'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1">
+                    {!isOffline && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleForceSync();
+                        }}
+                        disabled={syncing}
+                        title="Force immediate cloud sync"
+                        className="flex items-center justify-center p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${syncing ? 'animate-spin text-[#FF9900]' : ''}`} />
+                      </button>
                     )}
-                    {!isOffline && <span className={`absolute top-0 right-0 w-1.5 h-1.5 rounded-full ${syncing ? 'bg-[#FF9900]' : 'bg-emerald-500'}`} />}
+                    
+                    <span 
+                      onClick={() => {
+                        setShowSyncStatsPanel(!showSyncStatsPanel);
+                        if (!showSyncStatsPanel) {
+                          measurePingLatency();
+                        }
+                      }}
+                      className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 relative cursor-pointer shrink-0"
+                      title="Toggle Cloud Health Dashboard"
+                    >
+                      {isOffline ? (
+                        <CloudLightning className="w-4 h-4 shrink-0 text-red-500" />
+                      ) : (
+                        <CloudLightning className={`w-4 h-4 shrink-0 ${syncing ? 'text-[#FF9900]' : 'text-emerald-500'}`} />
+                      )}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* User profile bubble */}
+                <div 
+                  className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 sm:pl-1.5 sm:pr-2.5 sm:py-1 rounded-full border border-slate-200 dark:border-slate-700 shrink-0"
+                  title={`${user.displayName || 'Cloud Learner'} (${user.email || 'Anonymous'})`}
+                >
+                  {user.photoURL ? (
+                    <img 
+                      src={user.photoURL} 
+                      alt="avatar" 
+                      referrerPolicy="no-referrer"
+                      className="w-6 h-6 sm:w-5 sm:h-5 rounded-full border border-slate-300 dark:border-slate-600 object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-6 h-6 sm:w-5 sm:h-5 rounded-full bg-slate-800 dark:bg-slate-900 text-[#FF9900] flex items-center justify-center font-bold text-[10px] border border-slate-700 dark:border-slate-800 shrink-0 uppercase">
+                      {(user.displayName || user.email || 'A').charAt(0)}
+                    </div>
+                  )}
+                  <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 max-w-[60px] truncate hidden md:inline-block">
+                    {user.displayName?.split(' ')[0] || (user.isAnonymous ? 'Guest' : 'Learner')}
+                  </span>
+                  <button 
+                    onClick={() => logoutUser()}
+                    className="hidden sm:inline-flex p-0.5 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-3 h-3 shrink-0" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setActiveTab("dashboard");
+                  loginWithGoogle().catch(err => {
+                    console.error("Sign in failed:", err);
+                  });
+                }}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 text-xs font-bold rounded-xl hover:opacity-90 transition-all shadow-xs cursor-pointer shrink-0 whitespace-nowrap"
+                title="Sign in with Google to sync progress across devices"
+              >
+                <UserIcon className="w-3.5 h-3.5 shrink-0 text-[#FF9900] dark:text-slate-950" />
+                <span className="hidden xs:inline">Sign In</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2 (Mobile Vertical Only): Dedicated 5-Icon Quick Toolbar — Zero Clipped or Hidden Icons */}
+        <div className="grid grid-cols-5 gap-1 md:hidden pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setIsTourModalOpen(true);
+            }}
+            className="min-h-[38px] px-1 py-1 rounded-xl flex items-center justify-center gap-1 text-[11px] font-semibold bg-amber-500/12 text-amber-700 dark:text-amber-300 border border-amber-500/25 cursor-pointer min-w-0"
+            aria-label="Open AI Audio Tour & Podcasts"
+          >
+            <Radio className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+            <span className="truncate">Tour</span>
+          </button>
+
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setIsDrawerOpen(true);
+            }}
+            className={`min-h-[38px] px-1 py-1 rounded-xl flex items-center justify-center gap-1 text-[11px] font-semibold border cursor-pointer min-w-0 ${
+              isAudioPlaying
+                ? "bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400"
+                : "bg-slate-100/90 dark:bg-slate-800/90 border-slate-200/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-200"
+            }`}
+            aria-label="Open Audio Study Studio"
+          >
+            <Headphones className={`w-3.5 h-3.5 shrink-0 ${isAudioPlaying ? "text-amber-500" : ""}`} />
+            <span className="truncate">Audio</span>
+          </button>
+
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setShowCommandPalette(true);
+            }}
+            className="min-h-[38px] px-1 py-1 rounded-xl flex items-center justify-center gap-1 text-[11px] font-semibold bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 cursor-pointer min-w-0"
+            aria-label="Open Quick Search"
+          >
+            <Search className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Find</span>
+          </button>
+
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setShowSyncStatsPanel(!showSyncStatsPanel);
+              if (!showSyncStatsPanel) {
+                measurePingLatency();
+              }
+            }}
+            className="min-h-[38px] px-1 py-1 rounded-xl flex items-center justify-center gap-1 text-[11px] font-semibold bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 cursor-pointer min-w-0"
+            aria-label="Toggle Cloud Sync Diagnostics"
+          >
+            <CloudLightning
+              className={`w-3.5 h-3.5 shrink-0 ${
+                isOffline ? "text-red-500" : syncing ? "text-[#FF9900]" : "text-emerald-500"
+              }`}
+            />
+            <span className="truncate">{isOffline ? "Off" : syncing ? "Sync" : "Cloud"}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setDarkMode(!darkMode);
+            }}
+            className="min-h-[38px] px-1 py-1 rounded-xl flex items-center justify-center gap-1 text-[11px] font-semibold bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 cursor-pointer min-w-0"
+            aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {darkMode ? (
+              <Sun className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+            ) : (
+              <Moon className="w-3.5 h-3.5 shrink-0 text-indigo-500" />
+            )}
+            <span className="truncate">{darkMode ? "Light" : "Dark"}</span>
+          </button>
+        </div>
+
+        {/* Floating Sync Telemetry Diagnostics Popover (Works on Mobile & Desktop) */}
+        {showSyncStatsPanel && (
+          <div className="fixed left-3 right-3 md:left-auto md:right-6 top-[calc(6.25rem+env(safe-area-inset-top))] md:top-16 md:w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xl z-50 animate-fade-in text-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400 dark:text-slate-500">Cloud Sync Diagnostics</span>
+              <button 
+                onClick={() => setShowSyncStatsPanel(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold p-1 cursor-pointer"
+                aria-label="Close Cloud Sync Diagnostics"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Server Latency Ping:</span>
+                <div className="flex items-center gap-1.5">
+                  {isCheckingPing ? (
+                    <span className="text-[10px] font-mono text-amber-500">pinging...</span>
+                  ) : pingLatency !== null ? (
+                    <span className="font-mono font-bold text-emerald-500 tabular-nums">{pingLatency} ms</span>
+                  ) : (
+                    <span className="font-mono text-red-500">Timeout</span>
+                  )}
+                  <button
+                    onClick={measurePingLatency}
+                    disabled={isCheckingPing}
+                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 rounded transition-colors cursor-pointer"
+                    title="Measure server response time"
+                  >
+                    <RefreshCw className={`w-3 h-3 shrink-0 ${isCheckingPing ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Network State:</span>
+                <span className={`font-bold ${isOffline ? 'text-rose-500' : 'text-emerald-500'}`}>
+                  {isOffline ? 'Offline' : 'Online'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Database Engine:</span>
+                <span className="font-bold text-slate-700 dark:text-slate-200">
+                  PostgreSQL Cloud SQL
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-1 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-slate-400">Last Sync Cycle:</span>
+                  <span className="font-bold font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+                    {lastSyncTime ? lastSyncTime.toLocaleTimeString() : 'No saved cycle'}
                   </span>
                 </div>
-
-                {/* Dropdown Floating Sync Telemetry Diagnostics Menu */}
-                {showSyncStatsPanel && (
-                  <div className="absolute right-0 top-10 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm p-4 shadow-xl z-50 animate-fade-in text-xs space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                      <span className="font-black uppercase tracking-wider text-[10px] text-slate-400 dark:text-slate-500">Cloud Sync Diagnostics</span>
-                      <button 
-                        onClick={() => setShowSyncStatsPanel(false)}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <div className="space-y-2">
-                      {/* Live Network Ping */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500 dark:text-slate-400">Server Latency Ping:</span>
-                        <div className="flex items-center gap-1.5">
-                          {isCheckingPing ? (
-                            <span className="text-[10px] font-mono text-amber-500 animate-pulse">pinging...</span>
-                          ) : pingLatency !== null ? (
-                            <span className="font-mono font-bold text-emerald-500">{pingLatency} ms</span>
-                          ) : (
-                            <span className="font-mono text-red-500">Timeout</span>
-                          )}
-                          <button
-                            onClick={measurePingLatency}
-                            disabled={isCheckingPing}
-                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 rounded transition-colors"
-                            title="Measure server response time"
-                          >
-                            <RefreshCw className={`w-3 h-3 ${isCheckingPing ? 'animate-spin' : ''}`} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Connection status */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500 dark:text-slate-400">Network State:</span>
-                        <span className={`font-bold flex items-center gap-1 ${isOffline ? 'text-rose-500' : 'text-emerald-500'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isOffline ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                          {isOffline ? 'Offline' : 'Online (Socket Active)'}
-                        </span>
-                      </div>
-
-                      {/* Database engine status */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500 dark:text-slate-400">Database Engine:</span>
-                        <span className="font-bold text-slate-750 dark:text-slate-250">
-                          PostgreSQL Cloud SQL
-                        </span>
-                      </div>
-
-                      {/* Firestore region verification */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500 dark:text-slate-400">Firestore Custom ID:</span>
-                        <span className="font-mono text-[9px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-350 select-all font-black">
-                          ai-studio-awsgoogle...
-                        </span>
-                      </div>
-
-                      {/* Sync stats payloads */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500 dark:text-slate-400">Payload Sync Size:</span>
-                        <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                          ~12.4 KB (JSON format)
-                        </span>
-                      </div>
-
-                      {/* Last synchronized */}
-                      <div className="flex flex-col gap-1 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-slate-400">Last Sync Cycle:</span>
-                          <span className="font-bold font-mono text-slate-500 dark:text-slate-400">
-                            {lastSyncTime ? lastSyncTime.toLocaleTimeString() : 'No saved cycle'}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            handleForceSync();
-                          }}
-                          disabled={syncing || isOffline}
-                          className="w-full mt-1 bg-slate-900 hover:bg-slate-800 text-[#FF9900] py-1 font-bold text-[10px] rounded uppercase tracking-wider transition-all disabled:opacity-50"
-                        >
-                          {syncing ? 'Pushing State...' : 'Force Diagnostic Re-Sync'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                {user && (
+                  <button
+                    onClick={() => handleForceSync()}
+                    disabled={syncing || isOffline}
+                    className="w-full mt-1 bg-slate-900 hover:bg-slate-800 text-[#FF9900] py-2 font-bold text-[11px] rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {syncing ? 'Pushing State...' : 'Force Re-Sync'}
+                  </button>
                 )}
-              </div>
-              
-              {/* User profile bubble */}
-              <div 
-                className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 pl-1.5 pr-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700"
-                title={`${user.displayName || 'Cloud Learner'} (${user.email || 'Anonymous'})`}
-              >
-                {user.photoURL ? (
-                  <img 
-                    src={user.photoURL} 
-                    alt="avatar" 
-                    referrerPolicy="no-referrer"
-                    className="w-5 h-5 rounded-full border border-slate-300 dark:border-slate-600 object-cover shrink-0"
-                  />
-                ) : (
-                  <div className="w-5 h-5 rounded-full bg-slate-800 dark:bg-slate-900 text-[#FF9900] flex items-center justify-center font-bold text-[9px] border border-slate-700 dark:border-slate-800 shrink-0 uppercase">
-                    {(user.displayName || user.email || 'A').charAt(0)}
-                  </div>
-                )}
-                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 max-w-[60px] truncate hidden xs:inline-block">
-                  {user.displayName?.split(' ')[0] || (user.isAnonymous ? 'Guest' : 'Cloud Student')}
-                </span>
-                <button 
-                  onClick={() => logoutUser()}
-                  className="p-0.5 text-slate-400 hover:text-red-500 transition-colors shrink-0 animate-fade-in"
-                  title="Sign Out"
-                >
-                  <LogOut className="w-3 h-3" />
-                </button>
               </div>
             </div>
-          ) : (
-            <button
-              onClick={() => {
-                setActiveTab("dashboard");
-                loginWithGoogle().catch(err => {
-                  console.error("Sign in failed:", err);
-                });
-              }}
-              className="flex items-center gap-1 px-3 py-1 bg-slate-900 text-white text-[10px] sm:text-xs font-black rounded-full hover:bg-slate-800 border border-slate-900 transition-all shadow-sm cursor-pointer shrink-0"
-              title="Sign in with Google to sync progress across devices"
-            >
-              <UserIcon className="w-3.5 h-3.5 text-[#FF9900]" />
-              <span>Sign In</span>
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </header>
 
       {/* Offline Alert Banner */}
@@ -1047,26 +1195,27 @@ export default function App() {
         {/* Dockable Left Sidebar */}
         <aside 
           className={`border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all duration-300 ease-in-out shrink-0 flex flex-col justify-between 
-            fixed md:relative top-0 bottom-0 left-0 z-30 md:z-10 h-screen md:h-full
+            fixed md:relative top-0 bottom-0 left-0 z-30 md:z-10 h-[100dvh] md:h-full
             ${sidebarOpen ? "w-64 translate-x-0" : "w-0 md:w-0 -translate-x-full md:translate-x-0 overflow-hidden border-r-0"}
           `}
         >
-          {/* Mobile sidebar header */}
-          <div className="flex md:hidden items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/20 shrink-0">
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 bg-slate-900 dark:bg-slate-950 flex items-center justify-center rounded-sm font-black text-[#FF9900] text-[10px] border border-slate-800 dark:border-slate-905">
+          {/* Mobile sidebar header (iOS Safe-Area Protected) */}
+          <div className="flex md:hidden items-center justify-between px-4 pb-3 pt-[max(0.9rem,env(safe-area-inset-top))] border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/20 shrink-0">
+            <div className="flex items-center space-x-2 min-w-0">
+              <div className="w-6 h-6 bg-slate-900 dark:bg-slate-950 flex items-center justify-center rounded-sm font-black text-[#FF9900] text-[10px] border border-slate-800 dark:border-slate-905 shrink-0">
                 AWS
               </div>
-              <span className="font-extrabold text-xs tracking-tight text-slate-900 dark:text-slate-100 uppercase">
+              <span className="font-extrabold text-xs tracking-tight text-slate-900 dark:text-slate-100 uppercase truncate">
                 CLF-C02 Companion
               </span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-sm"
+              className="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shrink-0 cursor-pointer"
               title="Close Menu"
+              aria-label="Close Sidebar Menu"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 shrink-0" />
             </button>
           </div>
 
@@ -1087,6 +1236,31 @@ export default function App() {
                 >
                   <Layers className="w-4 h-4 shrink-0" />
                   Dashboard
+                </button>
+
+                <button
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setIsTourModalOpen(true);
+                  }}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/25"
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <Radio className="w-4 h-4 shrink-0 text-amber-500" />
+                    <span className="truncate">AI Audio Tour & Podcasts</span>
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => handleTabChange("question-bank")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
+                    activeTab === "question-bank"
+                      ? "bg-slate-900 text-white shadow-sm dark:bg-slate-800 dark:text-slate-100"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-500" />
+                  <span className="truncate">AI Question Bank ({activeCertTrack})</span>
                 </button>
 
                 <button
@@ -1171,6 +1345,18 @@ export default function App() {
                 >
                   <Briefcase className="w-4 h-4 shrink-0 text-[#FF9900]" />
                   HONE Interview Prep
+                </button>
+
+                <button
+                  onClick={() => handleTabChange("blueprint-lesson")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-xs font-bold tracking-tight transition-all text-left cursor-pointer ${
+                    activeTab === "blueprint-lesson"
+                      ? "bg-slate-900 text-white shadow-sm dark:bg-slate-800 dark:text-slate-100"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 shrink-0 text-[#FF9900]" />
+                  CLF-C02 Blueprint Lesson
                 </button>
 
                 <button
@@ -1260,95 +1446,123 @@ export default function App() {
             )}
           </div>
 
-          {/* Theme Control and AI Settings */}
-          <div className="flex flex-col border-t border-slate-100 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/10 shrink-0">
-            {/* AI Model Intelligence Toggle */}
-            <div className="px-4 py-3 flex flex-col gap-2 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center justify-between">
-                Intelligence Engine
-                {aiModelMode === "expert" ? <Sparkles className="w-3 h-3 text-emerald-500" /> : <Zap className="w-3 h-3 text-[#FF9900]" />}
-              </span>
-              <div className="flex bg-slate-200 dark:bg-slate-800 p-0.5 rounded-sm">
+          {/* App Store Utilities, Haptics & Theme Control (iOS Safe-Area Protected) */}
+          <div className="flex flex-col border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-950/15 shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <div className="px-4 py-3 space-y-2 border-b border-slate-100 dark:border-slate-800">
+              <PWAInstallButton variant="card" />
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
-                  onClick={() => setAiModelMode("fast")}
-                  className={`flex-1 py-1.5 text-[10px] font-bold tracking-wider rounded-xs uppercase transition-all ${
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setShowQuickStartGuide(true);
+                  }}
+                  className="px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  title="10-Minute Rapid Onboarding"
+                >
+                  <Compass className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                  <span>Guide</span>
+                </button>
+                <button
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setShowDeployGuide(true);
+                  }}
+                  className="px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  title="Hosting & Deployment"
+                >
+                  <Rocket className="w-3.5 h-3.5 shrink-0 text-cyan-500" />
+                  <span>Host</span>
+                </button>
+                <button
+                  onClick={handleDownloadOfflineCompanion}
+                  className="px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  title="Export Standalone HTML"
+                >
+                  <Download className="w-3.5 h-3.5 shrink-0 text-[#FF9900]" />
+                  <span>Export</span>
+                </button>
+              </div>
+            </div>
+
+            {/* AI Model Intelligence Toggle */}
+            <div className="px-4 py-2.5 flex flex-col gap-1.5 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 flex items-center justify-between">
+                AI Tutor Mode
+                {aiModelMode === "expert" ? <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> : <Zap className="w-3.5 h-3.5 shrink-0 text-[#FF9900]" />}
+              </span>
+              <div className="flex bg-slate-200/80 dark:bg-slate-800 p-0.5 rounded-xl">
+                <button
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setAiModelMode("fast");
+                  }}
+                  className={`flex-1 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
                     aiModelMode === "fast" 
                       ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" 
                       : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
                   }`}
                 >
-                  Fast Mode
+                  Fast
                 </button>
                 <button
-                  onClick={() => setAiModelMode("expert")}
-                  className={`flex-1 py-1.5 text-[10px] font-bold tracking-wider rounded-xs uppercase transition-all ${
+                  onClick={() => {
+                    triggerHaptic("light");
+                    setAiModelMode("expert");
+                  }}
+                  className={`flex-1 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
                     aiModelMode === "expert" 
                       ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" 
                       : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
                   }`}
                 >
-                  Expert Mode
+                  Socratic
                 </button>
               </div>
-              <p className="text-[9px] text-slate-400 leading-tight">
-                {aiModelMode === "fast" ? "gemini-3.6-flash (Concise): Optimized for speed and rapid recall." : "gemini-3.6-flash (Socratic): Advanced deep-reasoning socratic mode."}
-              </p>
             </div>
-            {/* Theme Toggle */}
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                Theme Control
-              </span>
+
+            {/* Haptics & Theme Controls */}
+            <div className="px-4 py-2.5 flex items-center justify-between gap-2">
               <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-xs"
-                title={darkMode ? "Banish the shadows, switch to Light Mode" : "Rest your eyes, switch to Dark Mode"}
+                onClick={() => {
+                  const next = !hapticsOn;
+                  setHapticsEnabled(next);
+                  setHapticsOn(next);
+                  if (next) triggerHaptic("success");
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                title="Toggle tactile haptics & sound feedback"
+              >
+                {hapticsOn ? <Volume2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> : <VolumeX className="w-3.5 h-3.5 shrink-0 text-slate-400" />}
+                <span>{hapticsOn ? "Haptics On" : "Muted"}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic("light");
+                  setDarkMode(!darkMode);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
               >
                 {darkMode ? (
                   <>
-                    <Sun className="w-3.5 h-3.5 text-amber-500 fill-amber-500 animate-spin-slow" />
-                    <span className="text-amber-500">Light</span>
+                    <Sun className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                    <span>Light</span>
                   </>
                 ) : (
                   <>
-                    <Moon className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500" />
-                    <span className="text-slate-500">Dark</span>
+                    <Moon className="w-3.5 h-3.5 shrink-0 text-indigo-500" />
+                    <span>Dark</span>
                   </>
                 )}
               </button>
             </div>
           </div>
-
-          {/* Sidebar Footer with Credits */}
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500 space-y-1 bg-slate-50/50 dark:bg-slate-950/30 shrink-0">
-            <p className="font-bold text-slate-500 dark:text-slate-400">CLF-C02 Premium Suite</p>
-            <p className="leading-snug">Designed for AWS Certified Cloud Practitioner mastery.</p>
-          </div>
         </aside>
 
         {/* Core Workspace Main Stage */}
-        <main ref={mainRef} className="flex-1 p-4 sm:p-6 md:pb-[max(1.5rem,env(safe-area-inset-bottom))] min-h-0 overflow-y-auto">
-          
-          {/* Welcome Notification Accent */}
-          <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 rounded-sm flex items-start justify-between gap-4 shadow-sm mb-6 border border-slate-800">
-            <div className="flex gap-3 items-start">
-              <div className="bg-[#FF9900] text-slate-900 p-2 rounded-xs shrink-0">
-                <Sparkles className="w-4 h-4 text-slate-900 fill-slate-900" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-sm tracking-tight text-[#FF9900] uppercase">
-                  CLF-C02 Masterclass Interactive Simulator
-                </h3>
-                <p className="text-xs text-slate-300 leading-normal mt-0.5 max-w-2xl">
-                  Bypass the AWS exam trap questions! Tap into our active recall flip cards, test yourself in the scenario-based multiple choice engine, or search the Distractor Vault for core overlapping services.
-                </p>
-              </div>
-            </div>
-            
-            <span className="text-[10px] font-mono font-bold text-[#FF9900] bg-[#FF9900]/10 border border-[#FF9900]/25 px-2.5 py-1 rounded-sm shrink-0 uppercase tracking-widest hidden md:inline-block">
-              Study Hub v2
-            </span>
-          </div>
+        <main ref={mainRef} className="flex-1 p-3.5 sm:p-6 pb-20 md:pb-[max(2rem,env(safe-area-inset-bottom))] min-h-0 overflow-y-auto touch-scroll">
+          <div className="max-w-7xl mx-auto">
 
           {/* Dynamic Tab Rendering */}
           {activeTab === "dashboard" && (
@@ -1376,11 +1590,18 @@ export default function App() {
               redirectErrorGuide={redirectErrorGuide}
               interviewHistory={interviewHistory}
               onOpenExamConfidenceModal={() => setShowExamConfidenceModal(true)}
+              onMarkCard={handleMarkCard}
             />
           )}
 
           {activeTab === "professor" && (
-            <InteractiveProfessor user={user} onAddMinutes={handleAddStudyMinutes} aiModelMode={aiModelMode} />
+            <InteractiveProfessor
+              user={user}
+              onAddMinutes={handleAddStudyMinutes}
+              aiModelMode={aiModelMode}
+              quizHistory={quizHistory}
+              studyHistory={studyHistory}
+            />
           )}
 
           {activeTab === "flashcards" && (
@@ -1391,6 +1612,13 @@ export default function App() {
               onMarkCard={handleMarkCard}
               onResetStudyHistory={handleResetStudyHistory}
               initialDomainId={selectedDomainForFlashcards}
+            />
+          )}
+
+          {activeTab === "question-bank" && (
+            <AIQuestionBankView
+              onRecordQuizResult={handleRecordQuizResult}
+              onAddStudyMinutes={handleAddStudyMinutes}
             />
           )}
 
@@ -1415,6 +1643,13 @@ export default function App() {
 
           {activeTab === "slots" && (
             <NewAgeSlotMachine />
+          )}
+
+          {activeTab === "blueprint-lesson" && (
+            <BlueprintLessonView
+              onAddMinutes={handleAddStudyMinutes}
+              onNavigateToTab={handleTabChange}
+            />
           )}
 
           {activeTab === "visual-architecture" && (
@@ -1455,211 +1690,413 @@ export default function App() {
             />
           )}
 
+          </div>
         </main>
       </div>
       
-      {/* Mobile Bottom Navigation Dock (Top of the Footer) */}
-      <div 
-        className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex items-center justify-around px-1 z-20 shadow-lg pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      {/* Apple iOS-Style Frosted Bottom Tab Bar */}
+      <nav 
+        aria-label="Primary mobile navigation"
+        className="md:hidden border-t border-slate-200/80 dark:border-slate-800/80 bg-white/92 dark:bg-slate-900/92 backdrop-blur-xl shrink-0 grid grid-cols-5 items-center px-1 z-20 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))]"
       >
         <button 
           onClick={() => handleTabChange("dashboard")}
-          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center min-w-0 min-h-[44px] py-0.5 transition-colors cursor-pointer ${
             activeTab === "dashboard" 
-              ? "text-[#FF9900]" 
+              ? "text-amber-600 dark:text-amber-400" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           }`}
-          title="Dashboard"
+          title="Today"
         >
-          <Layers className="w-5 h-5" />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Dash</span>
-          {activeTab === "dashboard" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
-        </button>
-        
-        <button 
-          onClick={() => handleTabChange("professor")}
-          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
-            activeTab === "professor" 
-              ? "text-[#FF9900]" 
-              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-          }`}
-          title="Socratic Professor"
-        >
-          <Bot className={`w-5 h-5 ${activeTab === "professor" ? "text-[#FF9900]" : ""}`} />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Socratic</span>
-          {activeTab === "professor" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
+          <span className={`px-3 py-0.5 rounded-full transition-colors flex items-center justify-center ${activeTab === "dashboard" ? "bg-amber-500/15" : ""}`}>
+            <Layers className="w-5 h-5 shrink-0" />
+          </span>
+          <span className="text-[11px] font-medium mt-0.5 leading-none truncate max-w-full">Today</span>
         </button>
         
         <button 
           onClick={() => handleTabChange("flashcards")}
-          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center min-w-0 min-h-[44px] py-0.5 transition-colors cursor-pointer ${
             activeTab === "flashcards" 
-              ? "text-amber-500" 
+              ? "text-amber-600 dark:text-amber-400" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           }`}
           title="Flashcards"
         >
-          <BookOpen className="w-5 h-5" />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Cards</span>
-          {activeTab === "flashcards" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-amber-500 rounded-full" />}
+          <span className={`px-3 py-0.5 rounded-full transition-colors flex items-center justify-center ${activeTab === "flashcards" ? "bg-amber-500/15" : ""}`}>
+            <BookOpen className="w-5 h-5 shrink-0" />
+          </span>
+          <span className="text-[11px] font-medium mt-0.5 leading-none truncate max-w-full">Cards</span>
         </button>
 
         <button 
           onClick={() => handleTabChange("simulator")}
-          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center min-w-0 min-h-[44px] py-0.5 transition-colors cursor-pointer ${
             activeTab === "simulator" 
-              ? "text-[#FF9900]" 
+              ? "text-amber-600 dark:text-amber-400" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           }`}
           title="Exam Simulator"
         >
-          <AlertTriangle className="w-5 h-5" />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Exam</span>
-          {activeTab === "simulator" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />}
+          <span className={`px-3 py-0.5 rounded-full transition-colors flex items-center justify-center ${activeTab === "simulator" ? "bg-amber-500/15" : ""}`}>
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+          </span>
+          <span className="text-[11px] font-medium mt-0.5 leading-none truncate max-w-full">Exam</span>
         </button>
 
         <button 
-          onClick={() => handleTabChange("algorand")}
-          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
-            activeTab === "algorand" 
-              ? "text-yellow-500" 
+          onClick={() => handleTabChange("professor")}
+          className={`flex flex-col items-center justify-center min-w-0 min-h-[44px] py-0.5 transition-colors cursor-pointer ${
+            activeTab === "professor" 
+              ? "text-amber-600 dark:text-amber-400" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           }`}
-          title="Algorand Web3"
+          title="AI Tutor"
         >
-          <Wallet className="w-5 h-5" />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Web3</span>
-          {activeTab === "algorand" && <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-yellow-500 rounded-full" />}
+          <span className={`px-3 py-0.5 rounded-full transition-colors flex items-center justify-center ${activeTab === "professor" ? "bg-amber-500/15" : ""}`}>
+            <Bot className="w-5 h-5 shrink-0" />
+          </span>
+          <span className="text-[11px] font-medium mt-0.5 leading-none truncate max-w-full">Tutor</span>
         </button>
 
         <button 
-          onClick={() => setShowMobileMoreMenu(!showMobileMoreMenu)}
-          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition-all relative cursor-pointer ${
-            ["matching", "interview", "agents", "vault", "backup"].includes(activeTab) || showMobileMoreMenu
-              ? "text-[#FF9900]" 
+          onClick={() => {
+            triggerHaptic("light");
+            setShowMobileMoreMenu(!showMobileMoreMenu);
+          }}
+          className={`flex flex-col items-center justify-center min-w-0 min-h-[44px] py-0.5 transition-colors cursor-pointer ${
+            ["question-bank", "matching", "slots", "lightning-rush", "blueprint-lesson", "visual-architecture", "interview", "agents", "vault", "backup", "algorand"].includes(activeTab) || showMobileMoreMenu
+              ? "text-amber-600 dark:text-amber-400" 
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           }`}
-          title="More AWS Tools"
+          title="Menu & Tools"
         >
-          <MoreHorizontal className="w-5 h-5" />
-          <span className="text-[9px] font-extrabold mt-1 leading-none uppercase tracking-tight">Tools</span>
-          {(["matching", "interview", "agents", "vault", "backup"].includes(activeTab) || showMobileMoreMenu) && (
-            <span className="absolute bottom-0.5 w-1.5 h-1.5 bg-[#FF9900] rounded-full" />
-          )}
+          <span className={`px-3 py-0.5 rounded-full transition-colors flex items-center justify-center ${["question-bank", "matching", "slots", "lightning-rush", "blueprint-lesson", "visual-architecture", "interview", "agents", "vault", "backup", "algorand"].includes(activeTab) || showMobileMoreMenu ? "bg-amber-500/15" : ""}`}>
+            <MoreHorizontal className="w-5 h-5 shrink-0" />
+          </span>
+          <span className="text-[11px] font-medium mt-0.5 leading-none truncate max-w-full">More</span>
         </button>
-      </div>
+      </nav>
 
-      {/* Mobile Tools Sheet Overlay */}
+      {/* Apple-HIG Grouped iOS Bottom Sheet Overlay */}
       {showMobileMoreMenu && (
-        <div className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-md md:hidden flex flex-col justify-end animate-fade-in pt-[env(safe-area-inset-top)]">
-          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-200/50 dark:border-slate-700/50 rounded-t-xl p-5 space-y-4 max-h-[80vh] overflow-y-auto shadow-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))] ring-1 ring-white/10">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-[#FF9900] text-slate-950 rounded-xs flex items-center justify-center font-black text-xs">
-                  AWS
+        <div
+          onClick={() => setShowMobileMoreMenu(false)}
+          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-md md:hidden flex flex-col justify-end animate-fade-in pt-[env(safe-area-inset-top)]"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-100/98 dark:bg-slate-950/98 backdrop-blur-2xl border-t border-slate-200/60 dark:border-slate-800 rounded-t-3xl px-4 pt-3 space-y-5 max-h-[86dvh] overflow-y-auto touch-scroll shadow-2xl pb-[max(1.75rem,env(safe-area-inset-bottom))]"
+          >
+            {/* Drag handle + clean title */}
+            <div className="space-y-2.5 sticky top-0 bg-slate-100/95 dark:bg-slate-950/95 backdrop-blur-md pt-0.5 pb-2 z-10 -mx-4 px-4 border-b border-slate-200/70 dark:border-slate-800/80">
+              <div className="w-10 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <img src="/apple-touch-icon.png" alt="CloudMaster" className="w-7 h-7 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">
+                      Explore & Settings
+                    </h3>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
+                      {streak}d streak · {readinessScore}% ready
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                  All AWS Workspace Tools
-                </h3>
+                <button
+                  onClick={() => setShowMobileMoreMenu(false)}
+                  className="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-slate-200/70 dark:bg-slate-800 rounded-full shrink-0 cursor-pointer"
+                  aria-label="Close menu"
+                >
+                  <X className="w-4 h-4 shrink-0" />
+                </button>
               </div>
+            </div>
+
+            {/* Quick 2x2 Control Grid */}
+            <div className="grid grid-cols-2 gap-2.5">
               <button
-                onClick={() => setShowMobileMoreMenu(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded"
+                onClick={() => {
+                  triggerHaptic("light");
+                  setShowMobileMoreMenu(false);
+                  setIsDrawerOpen(true);
+                }}
+                className="min-h-[52px] p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 flex items-center gap-3 text-left cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Headphones className="w-4 h-4 shrink-0" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white truncate">Audio Studio</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate tabular-nums">
+                    {cacheStats.count} cached
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic("light");
+                  setDarkMode(!darkMode);
+                }}
+                className="min-h-[52px] p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 flex items-center gap-3 text-left cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/12 text-indigo-500 flex items-center justify-center shrink-0">
+                  {darkMode ? <Sun className="w-4 h-4 shrink-0 text-amber-500" /> : <Moon className="w-4 h-4 shrink-0" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white truncate">Appearance</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    {darkMode ? "Dark Mode" : "Light Mode"}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  const next = !hapticsOn;
+                  setHapticsEnabled(next);
+                  setHapticsOn(next);
+                  if (next) triggerHaptic("success");
+                }}
+                className="min-h-[52px] p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 flex items-center gap-3 text-left cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/12 text-emerald-500 flex items-center justify-center shrink-0">
+                  {hapticsOn ? <Volume2 className="w-4 h-4 shrink-0" /> : <VolumeX className="w-4 h-4 shrink-0 text-slate-400" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white truncate">Haptics</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    {hapticsOn ? "Enabled" : "Muted"}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic("light");
+                  setAiModelMode(aiModelMode === "fast" ? "expert" : "fast");
+                }}
+                className="min-h-[52px] p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 flex items-center gap-3 text-left cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-500/12 text-[#FF9900] flex items-center justify-center shrink-0">
+                  {aiModelMode === "expert" ? <Sparkles className="w-4 h-4 shrink-0" /> : <Zap className="w-4 h-4 shrink-0" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white truncate">AI Tutor</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate capitalize">
+                    {aiModelMode} Mode
+                  </div>
+                </div>
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                onClick={() => handleTabChange("slots")}
-                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
-                  activeTab === "slots"
-                    ? "bg-amber-500/15 border-amber-500 text-slate-900 dark:text-white font-bold"
-                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                }`}
-              >
-                <Crown className="w-5 h-5 text-amber-500 shrink-0" />
-                <div>
-                  <div className="text-xs font-bold text-amber-500">New Age Slot Machine</div>
-                  <div className="text-[10px] text-slate-400">Match AWS architectural synergies & Socratic bonus jackpots</div>
-                </div>
-              </button>
+            {/* Section 1: Learn & Architecture */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-2">
+                Learn & Architecture
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/70 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+                {[
+                  { id: "question-bank", title: `AI-Reviewed Question Bank (${activeCertTrack})`, sub: "CLF-C02 & SAA-C03 · 6 AWS Pillars · PostgreSQL", icon: ShieldCheck, iconColor: "text-emerald-500", iconBg: "bg-emerald-500/12" },
+                  { id: "blueprint-lesson", title: "AWS CLF-C02 Blueprint Lesson", sub: "6-chapter interactive & audio masterclass", icon: Building2, iconColor: "text-[#FF9900]", iconBg: "bg-amber-500/12" },
+                  { id: "visual-architecture", title: "Visual Architecture Studio", sub: "3-Tier VPC, Serverless & CDN topologies", icon: Layers, iconColor: "text-indigo-500", iconBg: "bg-indigo-500/12" },
+                  { id: "vault", title: "The Distractor Vault", sub: "Compare commonly confused AWS services", icon: HelpCircle, iconColor: "text-sky-500", iconBg: "bg-sky-500/12" },
+                ].map((item) => {
+                  const IconComp = item.icon;
+                  const active = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleTabChange(item.id)}
+                      className={`w-full min-h-[56px] px-3.5 py-2.5 text-left flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                        active ? "bg-amber-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center shrink-0`}>
+                          <IconComp className={`w-5 h-5 shrink-0 ${item.iconColor}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className={`text-xs font-bold truncate ${active ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white"}`}>
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {item.sub}
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-              <button
-                onClick={() => handleTabChange("matching")}
-                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
-                  activeTab === "matching"
-                    ? "bg-[#FF9900]/10 border-[#FF9900] text-slate-900 dark:text-white font-bold"
-                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                }`}
-              >
-                <Zap className="w-5 h-5 text-[#FF9900] shrink-0" />
-                <div>
-                  <div className="text-xs font-bold">Scenario Matcher Game</div>
-                  <div className="text-[10px] text-slate-400">Match real-world AWS scenarios to architectural services</div>
-                </div>
-              </button>
+            {/* Section 2: Arcade & Drills */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-2">
+                Arcade & Drills
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/70 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+                {[
+                  { id: "lightning-rush", title: "Lightning Blitz & Loot", sub: "60s speed trivia sprint & mystery crates", icon: Sparkles, iconColor: "text-amber-500", iconBg: "bg-amber-500/12" },
+                  { id: "slots", title: "New Age Slot Machine", sub: "Match AWS synergies & Socratic jackpots", icon: Crown, iconColor: "text-amber-500", iconBg: "bg-amber-500/15" },
+                  { id: "matching", title: "Scenario Matcher Game", sub: "Match real-world use cases to services", icon: Zap, iconColor: "text-[#FF9900]", iconBg: "bg-orange-500/12" },
+                ].map((item) => {
+                  const IconComp = item.icon;
+                  const active = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleTabChange(item.id)}
+                      className={`w-full min-h-[56px] px-3.5 py-2.5 text-left flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                        active ? "bg-amber-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center shrink-0`}>
+                          <IconComp className={`w-5 h-5 shrink-0 ${item.iconColor}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className={`text-xs font-bold truncate ${active ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white"}`}>
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {item.sub}
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-              <button
-                onClick={() => handleTabChange("interview")}
-                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
-                  activeTab === "interview"
-                    ? "bg-[#FF9900]/10 border-[#FF9900] text-slate-900 dark:text-white font-bold"
-                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                }`}
-              >
-                <Briefcase className="w-5 h-5 text-amber-500 shrink-0" />
-                <div>
-                  <div className="text-xs font-bold">HONE Technical Interview Prep</div>
-                  <div className="text-[10px] text-slate-400">Simulate AWS architectural technical defense interviews</div>
-                </div>
-              </button>
+            {/* Section 3: Career, AI & Data */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-2">
+                Career, Web3 & Data
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/70 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+                {[
+                  { id: "interview", title: "HONE Technical Interview Prep", sub: "Architectural defense mock interviews", icon: Briefcase, iconColor: "text-amber-500", iconBg: "bg-amber-500/12" },
+                  { id: "agents", title: "AI Agent Swarm Platform", sub: "Multi-agent cloud architect council", icon: Cpu, iconColor: "text-emerald-500", iconBg: "bg-emerald-500/12" },
+                  { id: "algorand", title: "Algorand Web3 Portal", sub: "TestNet ASA credentials & AlgoKit CLI", icon: Wallet, iconColor: "text-yellow-500", iconBg: "bg-yellow-500/12" },
+                  { id: "backup", title: "Save Slots & Backups", sub: "Cloud sync, exports & offline storage", icon: Database, iconColor: "text-indigo-500", iconBg: "bg-indigo-500/12" },
+                ].map((item) => {
+                  const IconComp = item.icon;
+                  const active = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleTabChange(item.id)}
+                      className={`w-full min-h-[56px] px-3.5 py-2.5 text-left flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                        active ? "bg-amber-500/10" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center shrink-0`}>
+                          <IconComp className={`w-5 h-5 shrink-0 ${item.iconColor}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className={`text-xs font-bold truncate ${active ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white"}`}>
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {item.sub}
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-              <button
-                onClick={() => handleTabChange("agents")}
-                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
-                  activeTab === "agents"
-                    ? "bg-emerald-500/10 border-emerald-500 text-slate-900 dark:text-white font-bold"
-                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                }`}
-              >
-                <Cpu className="w-5 h-5 text-emerald-500 shrink-0" />
-                <div>
-                  <div className="text-xs font-bold">AI Agent Swarm Platform</div>
-                  <div className="text-[10px] text-slate-400">Multi-agent cloud architect design workspace</div>
-                </div>
-              </button>
+            {/* Account & Utilities Row */}
+            <div className="space-y-2.5">
+              <PWAInstallButton variant="card" />
 
-              <button
-                onClick={() => handleTabChange("vault")}
-                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
-                  activeTab === "vault"
-                    ? "bg-[#FF9900]/10 border-[#FF9900] text-slate-900 dark:text-white font-bold"
-                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                }`}
-              >
-                <HelpCircle className="w-5 h-5 text-sky-500 shrink-0" />
-                <div>
-                  <div className="text-xs font-bold">The Distractor Vault</div>
-                  <div className="text-[10px] text-slate-400">Deconstruct tricky exam distractor choices</div>
-                </div>
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setShowMobileMoreMenu(false);
+                    setIsTourModalOpen(true);
+                  }}
+                  className="min-h-[44px] px-3 py-2 rounded-xl bg-amber-500/12 border border-amber-500/30 text-xs font-semibold text-amber-700 dark:text-amber-300 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Radio className="w-4 h-4 shrink-0 text-amber-500" />
+                  <span className="truncate">AI Audio Tour</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMobileMoreMenu(false);
+                    handleDownloadOfflineCompanion();
+                  }}
+                  className="min-h-[44px] px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-4 h-4 shrink-0 text-[#FF9900]" />
+                  <span className="truncate">Export App</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMobileMoreMenu(false);
+                    setShowQuickStartGuide(true);
+                  }}
+                  className="min-h-[44px] px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Compass className="w-4 h-4 shrink-0 text-amber-500" />
+                  <span className="truncate">Quick Guide</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMobileMoreMenu(false);
+                    setShowDeployGuide(true);
+                  }}
+                  className="min-h-[44px] px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Rocket className="w-4 h-4 shrink-0 text-cyan-500" />
+                  <span className="truncate">Host & Deploy</span>
+                </button>
+              </div>
 
-              <button
-                onClick={() => handleTabChange("backup")}
-                className={`p-3 rounded border text-left flex items-center gap-3 transition-all ${
-                  activeTab === "backup"
-                    ? "bg-[#FF9900]/10 border-[#FF9900] text-slate-900 dark:text-white font-bold"
-                    : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                }`}
-              >
-                <Database className="w-5 h-5 text-indigo-500 shrink-0" />
-                <div>
-                  <div className="text-xs font-bold">Save Slots & Backups</div>
-                  <div className="text-[10px] text-slate-400">Cloud database sync, exports, and offline backups</div>
+              {user && (
+                <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 rounded-2xl px-3.5 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                      {user.displayName || user.email || "Signed In"}
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {syncing ? "Syncing…" : isOffline ? "Offline mode" : "Cloud synchronized"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!isOffline && (
+                      <button
+                        onClick={() => handleForceSync()}
+                        disabled={syncing}
+                        className="min-h-[36px] px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer flex items-center gap-1"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${syncing ? "animate-spin" : ""}`} />
+                        <span>Sync</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowMobileMoreMenu(false);
+                        logoutUser();
+                      }}
+                      className="min-h-[36px] px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-xs font-semibold text-rose-600 dark:text-rose-400 cursor-pointer flex items-center gap-1"
+                    >
+                      <LogOut className="w-3.5 h-3.5 shrink-0" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
                 </div>
-              </button>
+              )}
             </div>
           </div>
         </div>
@@ -1903,33 +2340,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Footer Meta bar */}
-      <footer className="h-10 bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 shrink-0 font-mono select-none z-20">
-        <div className="flex space-x-6 items-center">
-          <span className="flex items-center gap-1.5">
-            <Terminal className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-            SESSION: <span className="text-slate-600 dark:text-slate-300 font-semibold">AWS_MASTER_2026</span>
-          </span>
-          <div className="w-px h-3 bg-slate-300 dark:bg-slate-700 hidden sm:block"></div>
-          <span className="hidden sm:flex items-center gap-1.5">
-            READINESS SCORE: 
-            <span className="text-slate-700 dark:text-slate-200 font-bold">{readinessScore}%</span>
-            <span className="w-16 bg-slate-200 dark:bg-slate-800 h-1 rounded-full overflow-hidden inline-block border border-slate-300/40 dark:border-slate-700/40">
-              <span 
-                className="bg-emerald-500 h-full block transition-all duration-300" 
-                style={{ width: `${readinessScore}%` }}
-              ></span>
-            </span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[#FF9900] font-bold uppercase tracking-widest text-[9px] flex items-center gap-1 bg-slate-200/50 dark:bg-slate-800/40 px-2 py-0.5 rounded-sm border border-slate-300/40 dark:border-slate-750/50">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Solutions Architect Verified
-          </span>
-        </div>
-      </footer>
-
       {/* Official Exam Passing Confidence Modal */}
       <ExamPassingConfidenceModal
         report={readinessReport}
@@ -1937,6 +2347,37 @@ export default function App() {
         onClose={() => setShowExamConfidenceModal(false)}
         onNavigateToTab={setActiveTab}
       />
+
+      {/* Spotlight Quick Jump (⌘K) */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onNavigateToTab={(tab) => handleTabChange(tab)}
+        onSelectDomain={handleSelectDomainForFlashcards}
+        domains={domainsData}
+        flashcards={initialFlashcards}
+        distractors={distractorVault}
+      />
+
+      {/* Persistent Frosted-Glass Lesson Audio Player & Library Drawer */}
+      <GlobalAudioPlayer />
+
+      {/* Apple App Store AI Audio Tour, Dual-Host Podcasts & Voice Ask Studio */}
+      <AIAudioTourStudio
+        isOpen={isTourModalOpen}
+        onClose={() => setIsTourModalOpen(false)}
+        onNavigateToTab={handleTabChange}
+        onOpenConfidenceHub={() => setShowExamConfidenceModal(true)}
+      />
+
+      {/* Smart Contextual Mobile Virtual AI Agent Bubbles & Live 6-Pillar Mesh */}
+      <MobileAgentBubbles
+        onNavigateToTab={handleTabChange}
+        onOpenConfidenceHub={() => setShowExamConfidenceModal(true)}
+      />
+
+      {/* Offline Study Mode Indicator */}
+      <OfflineIndicator />
     </div>
   );
 }

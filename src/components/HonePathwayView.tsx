@@ -937,7 +937,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function gradeSpeechAnswer(audioBase64: string, scenarioText: string) {
   const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
+    model: 'gemini-4-hydrogen',
     contents: [
       { text: "Evaluate this audio response against the AWS scenario: " + scenarioText },
       { inlineData: { mimeType: "audio/mp3", data: audioBase64 } }

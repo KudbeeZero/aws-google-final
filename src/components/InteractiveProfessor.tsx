@@ -1,18 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Markdown from "react-markdown";
 import { getChatHistoryFromCloud, saveChatHistoryToCloud } from "../lib/db-client.js";
-import { 
-  Bot, 
-  Send, 
-  Trash2, 
-  Key, 
-  ShieldAlert, 
-  Sparkles, 
-  CheckCircle, 
-  AlertCircle, 
-  ArrowRight,
+import {
+  Bot,
+  Send,
+  Trash2,
+  ShieldAlert,
+  Sparkles,
+  CheckCircle,
+  AlertCircle,
   Flame,
-  HelpCircle,
   GraduationCap,
   Copy,
   Download,
@@ -20,45 +17,40 @@ import {
   Play,
   Volume2,
   VolumeX,
-  Pause,
   Loader2,
-  Database,
-  HardDrive,
-  WifiOff,
-  RotateCcw,
-  FileAudio,
   X,
   Gift,
   Trophy,
   Zap,
   Layers,
   Cpu,
-  Shield,
-  DollarSign,
-  Maximize2
+  Mic,
+  MicOff,
+  Square,
+  Headphones,
+  SlidersHorizontal,
+  Target,
+  Compass,
+  ChevronDown,
+  ChevronUp,
+  ArrowUpRight,
 } from "lucide-react";
-import { 
-  getCachedAudio, 
-  saveAudioToCache, 
-  synthesizeFallbackSpeechAudio 
-} from "../services/audioCacheService";
-import { 
-  recordProfessorCheckpoint, 
-  getGamificationProfile, 
-  openLootCrate, 
-  LootCrate, 
-  LootItem, 
-  RARITY_COLORS 
+import { useAudioLesson } from "../contexts/AudioLessonContext";
+import {
+  recordProfessorCheckpoint,
+  openLootCrate,
+  LootCrate,
+  LootItem,
 } from "../services/gamificationService";
-import { 
-  auth, 
-  saveActiveSocraticSessionState, 
-  getMostRecentActiveSocraticSession, 
-  markSocraticSessionCompleted, 
-  ActiveSocraticSessionDoc 
+import {
+  saveActiveSocraticSessionState,
+  getMostRecentActiveSocraticSession,
+  markSocraticSessionCompleted,
+  ActiveSocraticSessionDoc,
 } from "../lib/firebase";
+import { domainsData, initialFlashcards, trickQuestions } from "../data";
 
-export type TeachingMode = "socratic" | "rapid" | "whiteboard" | "distractor";
+export type TeachingMode = "socratic" | "rapid" | "whiteboard" | "distractor" | "voice";
 
 interface ChatMessage {
   id: string;
@@ -67,7 +59,7 @@ interface ChatMessage {
   timestamp: string;
   mode?: TeachingMode;
   agentCollaborator?: string;
-  // Parsed checkpoint data
+  isStreaming?: boolean;
   hasQuiz?: boolean;
   quizOptions?: { key: string; text: string }[];
   quizAnswer?: string;
@@ -79,39 +71,73 @@ interface InteractiveProfessorProps {
   user?: any;
   onAddMinutes?: (mins: number) => void;
   aiModelMode?: "fast" | "expert";
+  quizHistory?: { [key: string]: boolean };
+  studyHistory?: { [key: string]: "known" | "review" | null };
 }
 
 const ELEVENLABS_VOICES = [
-  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", label: "Professional Deep Male" },
-  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", label: "Crisp Young Male" },
-  { id: "VR6AewLTigWG4xSOukaG", name: "Arnold", label: "Authoritative Male" },
-  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", label: "Polished Narration Female" },
-  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", label: "Conversational Female" }
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", label: "Deep Architect" },
+  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", label: "Crisp Strategist" },
+  { id: "VR6AewLTigWG4xSOukaG", name: "Arnold", label: "Security Lead" },
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", label: "Senior Coach" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", label: "FinOps Advisor" },
 ];
 
 const cleanTextForSpeech = (text: string): string => {
   return text
+    .replace(/```[\s\S]*?```/g, "Architecture diagram shown on screen.")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/#+\s+(.+)/g, "$1")
     .replace(/-\s+/g, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\[Answer:\s*[A-D]\]/gi, "")
     .trim();
 };
 
-const MODE_SYSTEM_INSTRUCTIONS: Record<TeachingMode, string> = {
-  socratic: `You are 'Professor Cloud'—an elite AWS Solutions Architect and an encouraging, interactive Socratic mentor.
-Socratic Pedagogy Rules:
-1. Deep Socratic Architectural Analysis: Always dive deep into architectural trade-offs, security, cost optimization, and performance instead of generic responses. Ask probing questions that challenge the student to think.
-2. Relatable Context: Begin technical explanations with clear real-world analogies (e.g., Security Groups = hotel room security guards, NACLs = building perimeter guard gate).
-3. Distractor Alert: Explicitly call out typical keyword pitfalls or misleading exam options common to the AWS CLF-C02 exam.
-4. Active Checkpoints: Always end your response with a brief, high-yield multiple-choice concept check or scenario riddle.
+const MODE_META: Record<
+  TeachingMode,
+  { label: string; shortLabel: string; description: string; icon: React.ReactNode }
+> = {
+  socratic: {
+    label: "Socratic",
+    shortLabel: "Socratic",
+    description: "Analogies & guided mastery",
+    icon: <GraduationCap className="w-3.5 h-3.5" />,
+  },
+  rapid: {
+    label: "Rapid Sprint",
+    shortLabel: "Sprint",
+    description: "High-yield bullet takeaways",
+    icon: <Zap className="w-3.5 h-3.5" />,
+  },
+  whiteboard: {
+    label: "Whiteboard",
+    shortLabel: "Diagram",
+    description: "Topologies & failover drills",
+    icon: <Layers className="w-3.5 h-3.5" />,
+  },
+  distractor: {
+    label: "Trap Buster",
+    shortLabel: "Traps",
+    description: "Spot misleading exam keywords",
+    icon: <ShieldAlert className="w-3.5 h-3.5" />,
+  },
+  voice: {
+    label: "Voice Coach",
+    shortLabel: "Voice",
+    description: "Spoken-style conversational drill",
+    icon: <Headphones className="w-3.5 h-3.5" />,
+  },
+};
 
-Active Checkpoint Formatting Rules (MANDATORY):
-- Provide exactly 4 options labeled A), B), C), and D) on new lines.
-- Always include the correct answer code at the very bottom: [Answer: X] (where X is A, B, C, or D).
-Example:
+const MODE_SYSTEM_INSTRUCTIONS: Record<TeachingMode, string> = {
+  socratic: `You are 'Professor Cloud'—an elite AWS Solutions Architect and encouraging Socratic tutor preparing the user for the AWS Certified Cloud Practitioner (CLF-C02) exam.
+Rules:
+1. Begin with a memorable real-world analogy, then connect it cleanly to AWS architectural trade-offs (Security, Cost, Reliability).
+2. Highlight one specific CLF-C02 exam keyword trap to avoid.
+3. End with an active concept check formatted strictly as:
 A) Option A
 B) Option B
 C) Option C
@@ -119,186 +145,320 @@ D) Option D
 
 [Answer: C]`,
 
-  rapid: `You are 'Professor Cloud' in RAPID EXAM SPRINT mode.
+  rapid: `You are 'Professor Cloud' in RAPID EXAM SPRINT mode for AWS CLF-C02.
 Rules:
-1. Deliver ultra-concise, high-yield bulleted takeaways for AWS CLF-C02 exam prep.
-2. Highlight exact AWS keywords that guarantee the right answer on the test.
-3. Immediately follow with a lightning-fast scenario checkpoint question.
-4. Active Checkpoint Formatting: Exactly 4 options A), B), C), D) and [Answer: X] at the very end.`,
+1. Deliver 3-4 ultra-concise, high-yield bullet points bolding the exact AWS exam trigger keywords.
+2. Immediately finish with a crisp scenario checkpoint question with 4 options A) through D) and [Answer: X] at the bottom.`,
 
-  whiteboard: `You are 'Professor Cloud' in ARCHITECTURAL WHITEBOARD mode.
+  whiteboard: `You are 'Professor Cloud' in ARCHITECTURAL WHITEBOARD mode for AWS CLF-C02.
 Rules:
-1. Provide ASCII/box-diagram visual architecture representations of the AWS topology requested.
-2. Explain the traffic flow step-by-step with numbers (1, 2, 3...).
-3. Analyze the architecture through the AWS Well-Architected Pillars (Reliability, Security, Cost Optimization).
-4. End with a scenario question testing what happens during a component failure.
-5. Active Checkpoint Formatting: Exactly 4 options A), B), C), D) and [Answer: X] at the very end.`,
+1. Draw a clean, compact ASCII flow diagram inside a code block showing traffic flow.
+2. Explain traffic step-by-step (1, 2, 3) and briefly tie it to the Well-Architected Pillars.
+3. End with a component-failure multiple-choice scenario with 4 options A) through D) and [Answer: X] at the bottom.`,
 
-  distractor: `You are 'Professor Cloud' in DISTRACTOR TRAP BUSTER mode.
+  distractor: `You are 'Professor Cloud' in DISTRACTOR TRAP BUSTER mode for AWS CLF-C02.
 Rules:
-1. Analyze two or three closely related AWS services that candidates constantly confuse (e.g. WAF vs Shield vs Security Groups, KMS vs CloudHSM, S3 Glacier Flexible vs Deep Archive).
-2. Contrast their exact use cases with a side-by-side breakdown.
-3. Call out the 'trap keywords' the exam uses to deceive candidates.
-4. End with a tricky exam question featuring these distractors.
-5. Active Checkpoint Formatting: Exactly 4 options A), B), C), D) and [Answer: X] at the very end.`
+1. Contrast 2-3 easily confused AWS services side by side.
+2. Call out the exact "exam trap keywords" that separate the right answer from distractors.
+3. End with a tricky CLF-C02 distractor checkpoint with 4 options A) through D) and [Answer: X] at the bottom.`,
+
+  voice: `You are 'Professor Cloud' in SPOKEN VOICE COACH mode.
+Rules:
+1. Write naturally as if speaking aloud in a private coaching call—warm, crisp sentences, no ASCII tables or heavy markdown symbols.
+2. Keep the explanation tight (~90 words), highlight the key exam takeaway, then ask one snappy spoken-style 4-option check:
+A) Option A
+B) Option B
+C) Option C
+D) Option D
+
+[Answer: B]`,
 };
 
 const INITIAL_WELCOME: ChatMessage = {
   id: "welcome-msg",
   role: "model",
-  text: "Hello, Practitioner! I am **Professor Cloud**, your Socratic AWS mentor. Let's master the AWS Certified Cloud Practitioner (CLF-C02) exam!\n\nI can explain architecture with real-world analogies, draw whiteboard topologies, deconstruct tricky distractors, and quiz you on key concepts. Choose a study mode above or pick a high-yield topic below to begin!",
+  text: "Welcome to **Professor Cloud Studio**. Ask any AWS Cloud Practitioner question, tap the mic to speak hands-free, or pick a targeted drill below to build exam mastery.",
   timestamp: new Date().toISOString(),
-  mode: "socratic"
+  mode: "socratic",
 };
 
-export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user, onAddMinutes, aiModelMode = "expert" }) => {
+const QUICK_STARTERS = [
+  {
+    id: "security",
+    tag: "Security",
+    title: "Security Groups vs NACLs",
+    subtitle: "Stateful vs stateless firewall rules",
+    mode: "socratic" as TeachingMode,
+    prompt:
+      "Explain the difference between Security Groups and Network ACLs with a clear real-world analogy, flag common exam traps, and test me.",
+  },
+  {
+    id: "responsibility",
+    tag: "Concepts",
+    title: "Shared Responsibility Model",
+    subtitle: "OF the cloud vs IN the cloud",
+    mode: "socratic" as TeachingMode,
+    prompt:
+      "Break down the AWS Shared Responsibility Model across IaaS (EC2), PaaS (RDS), and SaaS/Serverless (S3/Lambda), and give me a tricky checkpoint question.",
+  },
+  {
+    id: "whiteboard_vpc",
+    tag: "Architecture",
+    title: "High-Availability 3-Tier VPC",
+    subtitle: "ALB, Multi-AZ & Private Subnets",
+    mode: "whiteboard" as TeachingMode,
+    prompt:
+      "Whiteboard a high-availability 3-tier VPC architecture (ALB, App Tier, Multi-AZ RDS) and test me with a failover scenario.",
+  },
+  {
+    id: "s3_tiers",
+    tag: "Billing & Storage",
+    title: "S3 Storage & Glacier Traps",
+    subtitle: "Retrieval times vs cost tiers",
+    mode: "distractor" as TeachingMode,
+    prompt:
+      "Compare S3 Standard, S3 Intelligent-Tiering, S3 Standard-IA, S3 Glacier Instant, Flexible Retrieval, and Deep Archive with exam trap keywords.",
+  },
+];
+
+const SWARM_SPECIALISTS = [
+  { name: "Archie", role: "Solutions Architect", badge: "Architecture" },
+  { name: "Guardian", role: "SecOps & Compliance", badge: "Security" },
+  { name: "PennyWise", role: "FinOps & Billing", badge: "Cost" },
+  { name: "TrapMaster", role: "CLF-C02 Distractors", badge: "Exam Traps" },
+];
+
+export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({
+  user,
+  onAddMinutes,
+  aiModelMode = "expert",
+  quizHistory = {},
+  studyHistory = {},
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_WELCOME]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeMode, setActiveMode] = useState<TeachingMode>("socratic");
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Audio & Hands-Free Coach states
+  const [autoSpeak, setAutoSpeak] = useState<boolean>(() => {
+    return localStorage.getItem("aws_professor_autospeak") === "true";
+  });
+  const [showAudioStudio, setShowAudioStudio] = useState(false);
+  const [showStarterDrawer, setShowStarterDrawer] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  // Voice Recognition state
+  const [isListeningMic, setIsListeningMic] = useState(false);
+  const [micSupported, setMicSupported] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Gamification states
   const [earnedXPToast, setEarnedXPToast] = useState<{ amount: number; message: string } | null>(null);
   const [droppedCrate, setDroppedCrate] = useState<LootCrate | null>(null);
-  const [openedCrateReward, setOpenedCrateReward] = useState<{ crate: LootCrate; rewards: LootItem[] } | null>(null);
+  const [openedCrateReward, setOpenedCrateReward] = useState<{ crate: LootCrate; rewards: LootItem[] } | null>(
+    null
+  );
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ElevenLabs Voice Synthesis hooks
+  const {
+    playLesson,
+    currentLesson,
+    isPlaying: isGlobalPlaying,
+    isLoading: isGlobalLoading,
+    voiceId: globalVoiceId,
+    playbackRate: globalRate,
+    volume: globalVolume,
+    setVoiceId: setGlobalVoiceId,
+    setPlaybackRate: setGlobalRate,
+    setVolume: setGlobalVolume,
+  } = useAudioLesson();
+
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => {
-    return localStorage.getItem("aws_professor_voice_id") || "pNInz6obpgDQGcFmaJgB";
+    return localStorage.getItem("aws_professor_voice_id") || globalVoiceId;
   });
   const [speechRate, setSpeechRate] = useState<number>(() => {
-    return Number(localStorage.getItem("aws_professor_speech_rate") || "1.0");
+    return Number(localStorage.getItem("aws_professor_speech_rate") || String(globalRate));
   });
   const [speechVolume, setSpeechVolume] = useState<number>(() => {
-    return Number(localStorage.getItem("aws_professor_speech_volume") || "1.0");
+    return Number(localStorage.getItem("aws_professor_speech_volume") || String(globalVolume));
   });
-  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
-  const [loadingMessageId, setLoadingMessageId] = useState<string | null>(null);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Adaptive Learner Telemetry (weakest AWS domain + exam readiness)
+  const learnerTelemetry = useMemo(() => {
+    const domainScores = domainsData.map((dom) => {
+      const domainCards = initialFlashcards.filter((c) => c.domainId === dom.id);
+      const knownCount = domainCards.filter((c) => studyHistory[c.id] === "known").length;
+
+      const domainQuizzes = trickQuestions.filter((q) => q.domainId === dom.id);
+      const attemptedQuizzes = domainQuizzes.filter((q) => quizHistory[q.id] !== undefined);
+      const correctQuizzes = attemptedQuizzes.filter((q) => quizHistory[q.id] === true);
+
+      const cardScore = domainCards.length > 0 ? knownCount / domainCards.length : 0.5;
+      const quizScore =
+        attemptedQuizzes.length > 0 ? correctQuizzes.length / attemptedQuizzes.length : cardScore;
+
+      const combinedPct = Math.round(((cardScore * 0.55 + quizScore * 0.45) * 100));
+      return {
+        id: dom.id,
+        name: dom.name,
+        pct: combinedPct,
+        attemptedCount: attemptedQuizzes.length + knownCount,
+      };
+    });
+
+    const sorted = [...domainScores].sort((a, b) => a.pct - b.pct);
+    const weakestDomain = sorted[0] || { id: "security-compliance", name: "Security & Compliance", pct: 0 };
+    const overallPct = Math.round(
+      domainScores.reduce((acc, d) => acc + d.pct, 0) / Math.max(1, domainScores.length)
+    );
+
+    return {
+      weakestDomain,
+      overallPct,
+      domainScores,
+    };
+  }, [quizHistory, studyHistory]);
+
+  // Session Checkpoint Tally
+  const sessionStats = useMemo(() => {
+    const answered = messages.filter((m) => m.hasQuiz && m.userSelectedAnswer);
+    const correct = answered.filter((m) => m.quizCorrect);
+    return {
+      answered: answered.length,
+      correct: correct.length,
+    };
+  }, [messages]);
+
+  // Detect Web Speech Recognition availability
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      setMicSupported(Boolean(SpeechRec));
+    }
+    return () => {
+      recognitionRef.current?.stop?.();
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const playingMessageId =
+    isGlobalPlaying && currentLesson?.id.startsWith("prof-")
+      ? currentLesson.id.replace("prof-", "")
+      : null;
+  const loadingMessageId =
+    isGlobalLoading && currentLesson?.id.startsWith("prof-")
+      ? currentLesson.id.replace("prof-", "")
+      : null;
 
   const handleCopyMessage = (msgId: string, text: string) => {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text)
-        .then(() => {
-          setCopiedMsgId(msgId);
-          setTimeout(() => setCopiedMsgId(null), 2000);
-        })
-        .catch((err) => {
-          console.warn("Message copy failed:", err);
-          setCopiedMsgId(msgId);
-          setTimeout(() => setCopiedMsgId(null), 2000);
-        });
-    } else {
-      setCopiedMsgId(msgId);
-      setTimeout(() => setCopiedMsgId(null), 2000);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
     }
+    setCopiedMsgId(msgId);
+    setTimeout(() => setCopiedMsgId(null), 2000);
   };
 
   const updateAudioVolume = (vol: number) => {
     setSpeechVolume(vol);
     localStorage.setItem("aws_professor_speech_volume", String(vol));
-    if (audioRef.current) {
-      audioRef.current.volume = vol;
-    }
+    setGlobalVolume(vol);
   };
 
   const updateAudioRate = (rate: number) => {
     setSpeechRate(rate);
     localStorage.setItem("aws_professor_speech_rate", String(rate));
-    if (audioRef.current) {
-      audioRef.current.playbackRate = rate;
-    }
+    setGlobalRate(rate);
   };
 
-  // Cleanup audio on unmount
+  const toggleAutoSpeak = () => {
+    setAutoSpeak((prev) => {
+      const next = !prev;
+      localStorage.setItem("aws_professor_autospeak", String(next));
+      return next;
+    });
+  };
+
   useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    };
-  }, []);
+    if (selectedVoiceId && selectedVoiceId !== globalVoiceId) {
+      setGlobalVoiceId(selectedVoiceId);
+    }
+  }, [selectedVoiceId, globalVoiceId, setGlobalVoiceId]);
 
   const handlePlaySpeech = async (messageId: string, text: string) => {
-    if (playingMessageId === messageId) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-      setPlayingMessageId(null);
+    const cleanedText = cleanTextForSpeech(text);
+    if (!cleanedText) return;
+    await playLesson(
+      {
+        id: `prof-${messageId}`,
+        title: cleanedText.slice(0, 56) + (cleanedText.length > 56 ? "..." : ""),
+        module: "Professor Cloud",
+        text: cleanedText,
+      },
+      { toggleIfSame: true }
+    );
+  };
+
+  const toggleMicInput = () => {
+    if (isListeningMic) {
+      recognitionRef.current?.stop?.();
+      setIsListeningMic(false);
       return;
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
 
-    setLoadingMessageId(messageId);
-    try {
-      const cleanedText = cleanTextForSpeech(text);
-      const response = await fetch("/api/elevenlabs/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: cleanedText,
-          voiceId: selectedVoiceId
-        })
-      });
+    const recognition = new SpeechRec();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
 
-      if (!response.ok) {
-        throw new Error("Speech synthesis request failed. Falling back to local browser speech.");
+    let finalTranscript = "";
+    recognition.onstart = () => setIsListeningMic(true);
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + " ";
+        } else {
+          interim += transcript;
+        }
       }
+      setInputText((finalTranscript + interim).trimStart());
+    };
+    recognition.onerror = () => setIsListeningMic(false);
+    recognition.onend = () => {
+      setIsListeningMic(false);
+      if (finalTranscript.trim()) {
+        handleSendMessage(finalTranscript.trim());
+      }
+    };
 
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      
-      const audio = new Audio(audioUrl);
-      audio.volume = speechVolume;
-      audio.playbackRate = speechRate;
-      audioRef.current = audio;
-      
-      audio.onplay = () => {
-        setLoadingMessageId(null);
-        setPlayingMessageId(messageId);
-      };
-
-      audio.onended = () => {
-        setPlayingMessageId(null);
-      };
-
-      audio.onerror = () => {
-        setLoadingMessageId(null);
-        setPlayingMessageId(null);
-        synthesizeFallbackSpeechAudio(cleanedText);
-      };
-
-      await audio.play();
-    } catch (error: any) {
-      console.warn("ElevenLabs TTS fallback:", error);
-      setLoadingMessageId(null);
-      setPlayingMessageId(null);
-      synthesizeFallbackSpeechAudio(cleanTextForSpeech(text));
-    }
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   // Active Socratic Session Resume State
   const [activeSessionDoc, setActiveSessionDoc] = useState<ActiveSocraticSessionDoc | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string>(`socratic-${Date.now()}`);
 
-  // Check Firestore for active session upon user login
   useEffect(() => {
     if (user?.uid) {
-      getMostRecentActiveSocraticSession(user.uid).then((docData) => {
-        if (docData && docData.status === "active" && docData.messages && docData.messages.length > 1) {
-          setActiveSessionDoc(docData);
-        } else {
-          setActiveSessionDoc(null);
-        }
-      }).catch(err => console.error("Error checking active Socratic session:", err));
+      getMostRecentActiveSocraticSession(user.uid)
+        .then((docData) => {
+          if (docData && docData.status === "active" && docData.messages && docData.messages.length > 1) {
+            setActiveSessionDoc(docData);
+          } else {
+            setActiveSessionDoc(null);
+          }
+        })
+        .catch(() => {});
     } else {
       setActiveSessionDoc(null);
     }
@@ -320,89 +480,90 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     setActiveSessionDoc(null);
   };
 
-  // Load chat history from Postgres or localStorage
   useEffect(() => {
     if (user) {
-      getChatHistoryFromCloud().then((history) => {
-        if (history && history.length > 0) {
-          setMessages(history);
-        } else {
-          setMessages([INITIAL_WELCOME]);
-        }
-      }).catch((e) => {
-        console.error("Failed to load chat history from Postgres:", e);
-        setMessages([INITIAL_WELCOME]);
-      });
+      getChatHistoryFromCloud()
+        .then((history) => {
+          if (history && history.length > 0) {
+            setMessages(history);
+          } else {
+            setMessages([INITIAL_WELCOME]);
+          }
+        })
+        .catch(() => setMessages([INITIAL_WELCOME]));
     } else {
       const savedChat = localStorage.getItem("aws_professor_chat_history_v1");
       if (savedChat) {
         try {
-          setMessages(JSON.parse(savedChat));
-        } catch (e) {
+          const parsed = JSON.parse(savedChat);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+          }
+        } catch {
           setMessages([INITIAL_WELCOME]);
         }
       }
     }
   }, [user]);
 
-  const saveHistory = async (newMessages: ChatMessage[]) => {
-    setMessages(newMessages);
+  const persistMessages = async (newMessages: ChatMessage[], sessionIdOverride?: string) => {
+    const cleanForStorage = newMessages.map(({ isStreaming: _s, ...rest }) =>
+      Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined))
+    ) as unknown as ChatMessage[];
     if (user) {
-      await saveChatHistoryToCloud(newMessages);
-      await saveActiveSocraticSessionState(user.uid, currentSessionId, {
+      await saveChatHistoryToCloud(cleanForStorage);
+      await saveActiveSocraticSessionState(user.uid, sessionIdOverride || currentSessionId, {
         status: "active",
-        messages: newMessages
+        messages: cleanForStorage,
       });
     } else {
-      localStorage.setItem("aws_professor_chat_history_v1", JSON.stringify(newMessages));
+      localStorage.setItem("aws_professor_chat_history_v1", JSON.stringify(cleanForStorage));
     }
   };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [messages.length, isLoading]);
 
-  // Helper to parse Professor messages for concept check quizzes
   const parseProfessorMessage = (text: string) => {
     const answerMatch = text.match(/\[Answer:\s*([A-D])\]/i);
     const answer = answerMatch ? answerMatch[1].toUpperCase() : undefined;
-
-    let cleanedText = text.replace(/\[Answer:\s*([A-D])\]/gi, "").trim();
+    const cleanedText = text.replace(/\[Answer:\s*([A-D])\]/gi, "").trim();
 
     const lines = cleanedText.split("\n");
     const options: { key: string; text: string }[] = [];
-    
-    lines.forEach(line => {
+    lines.forEach((line) => {
       const match = line.match(/^\s*(?:-\s*)?([A-D])\s*[\s\-\).:\]]+(.+)$/i);
       if (match) {
-        options.push({
-          key: match[1].toUpperCase(),
-          text: match[2].trim()
-        });
+        options.push({ key: match[1].toUpperCase(), text: match[2].trim() });
       }
     });
 
-    return {
-      cleanedText,
-      answer,
-      options
-    };
+    return { cleanedText, answer, options };
   };
 
   const handleResetChat = async () => {
-    if (window.confirm("Are you sure you want to reset your conversation history with Professor Cloud?")) {
-      if (user?.uid && currentSessionId) {
-        await markSocraticSessionCompleted(user.uid, currentSessionId);
-      }
-      const newSession = `socratic-${Date.now()}`;
-      setCurrentSessionId(newSession);
-      saveHistory([INITIAL_WELCOME]);
-      setApiError(null);
+    if (!confirmReset) {
+      setConfirmReset(true);
+      setTimeout(() => setConfirmReset(false), 4000);
+      return;
     }
+    setConfirmReset(false);
+    abortControllerRef.current?.abort();
+    if (user?.uid && currentSessionId) {
+      await markSocraticSessionCompleted(user.uid, currentSessionId);
+    }
+    const newSession = `socratic-${Date.now()}`;
+    setCurrentSessionId(newSession);
+    setMessages([INITIAL_WELCOME]);
+    await persistMessages([INITIAL_WELCOME], newSession);
+    setApiError(null);
   };
 
   const handleExportChat = () => {
-    const textToSave = messages.map(m => `[${m.role.toUpperCase()} - ${m.mode || 'Socratic'}]\n${m.text}`).join('\n\n---\n\n');
+    const textToSave = messages
+      .map((m) => `[${m.role.toUpperCase()} - ${m.mode || "socratic"}]\n${m.text}`)
+      .join("\n\n---\n\n");
     const blob = new Blob([textToSave], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -412,144 +573,202 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     URL.revokeObjectURL(url);
   };
 
-  // Send message to Gemini
-  const handleSendMessage = async (textToSend: string, summonedAgent?: string) => {
-    if (!textToSend.trim() || isLoading) return;
+  const handleStopStreaming = () => {
+    abortControllerRef.current?.abort();
+    setIsLoading(false);
+  };
 
+  const handleSendMessage = async (
+    textToSend: string,
+    summonedAgent?: string,
+    overrideMode?: TeachingMode
+  ) => {
+    const trimmed = textToSend.trim();
+    if (!trimmed || isLoading) return;
+
+    const effectiveMode = overrideMode || activeMode;
+    if (overrideMode) setActiveMode(overrideMode);
+
+    setShowStarterDrawer(false);
     setApiError(null);
+
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
-      text: textToSend,
+      text: trimmed,
       timestamp: new Date().toISOString(),
-      mode: activeMode,
-      agentCollaborator: summonedAgent
+      mode: effectiveMode,
+      agentCollaborator: summonedAgent,
     };
 
-    const updatedHistory = [...messages, userMessage];
-    saveHistory(updatedHistory);
+    const assistantId = `professor-${Date.now() + 1}`;
+    const streamingPlaceholder: ChatMessage = {
+      id: assistantId,
+      role: "model",
+      text: "",
+      timestamp: new Date().toISOString(),
+      mode: effectiveMode,
+      isStreaming: true,
+    };
+
+    const historyBeforeStream = [...messages, userMessage];
+    setMessages([...historyBeforeStream, streamingPlaceholder]);
     setInputText("");
     setIsLoading(true);
+    onAddMinutes?.(2);
 
-    if (onAddMinutes) {
-      onAddMinutes(2);
-    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
-      const contents = updatedHistory.map(msg => ({
-        role: msg.role === "user" ? "user" : "model",
-        parts: [{ text: msg.text }]
-      }));
+      const contents = historyBeforeStream
+        .filter((m) => m.id !== "welcome-msg")
+        .slice(-12)
+        .map((msg) => ({
+          role: msg.role === "user" ? "user" : "model",
+          parts: [{ text: msg.text }],
+        }));
 
-      const activeSystemInstruction = MODE_SYSTEM_INSTRUCTIONS[activeMode] || MODE_SYSTEM_INSTRUCTIONS.socratic;
-      const finalInstruction = summonedAgent
-        ? `${activeSystemInstruction}\n\nSPECIAL COLLABORATION: The user has summoned Swarm Agent ${summonedAgent}. Incorporate their specialized perspective into your answer!`
-        : activeSystemInstruction;
+      const adaptiveContext = `\n\nADAPTIVE STUDENT CONTEXT: Exam readiness ${learnerTelemetry.overallPct}%. Weakest domain: "${learnerTelemetry.weakestDomain.name}" (${learnerTelemetry.weakestDomain.pct}% mastery). Calibrate difficulty and highlight exam distinctions accordingly.`;
+      const modeInstruction = MODE_SYSTEM_INSTRUCTIONS[effectiveMode] || MODE_SYSTEM_INSTRUCTIONS.socratic;
+      const finalInstruction =
+        modeInstruction +
+        adaptiveContext +
+        (summonedAgent
+          ? `\n\nSPECIAL COLLABORATION: You are collaborating with Swarm Specialist @${summonedAgent}. Channel their specialized AWS expertise directly in your response.`
+          : "");
 
-      const apiResponse = await fetch("/api/gemini/professor-chat", {
+      const apiResponse = await fetch("/api/gemini/professor-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           contents,
           aiModelMode,
-          systemInstruction: finalInstruction
-        })
+          systemInstruction: finalInstruction,
+        }),
       });
-      
-      if (!apiResponse.ok) {
-        throw new Error("Failed to get response from Professor API");
-      }
-      
-      const response = await apiResponse.json();
-      if (response.error) {
-        throw new Error(response.error);
+
+      if (!apiResponse.ok || !apiResponse.body) {
+        let errMessage = "Failed to connect to Professor Cloud streaming service.";
+        try {
+          const errJson = await apiResponse.json();
+          if (errJson?.error) errMessage = errJson.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(errMessage);
       }
 
-      const responseText = response.text || "Professor Cloud is reflecting on that...";
-      const parsed = parseProfessorMessage(responseText);
+      const reader = apiResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      let buffer = "";
 
-      const professorMessage: ChatMessage = {
-        id: `professor-${Date.now()}`,
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const payload = JSON.parse(line.slice(6));
+            if (payload.error) {
+              throw new Error(payload.error);
+            }
+            if (payload.delta) {
+              accumulated += payload.delta;
+              const liveText = accumulated.replace(/\[Answer:\s*[A-D]?\]?/gi, "");
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, text: liveText } : m))
+              );
+            }
+          } catch (parseErr: any) {
+            if (parseErr?.message && !parseErr.message.includes("JSON")) {
+              throw parseErr;
+            }
+          }
+        }
+      }
+
+      const finalRaw = accumulated.trim() || "Ready when you are — ask a follow-up to continue.";
+      const parsed = parseProfessorMessage(finalRaw);
+      const completedMessage: ChatMessage = {
+        id: assistantId,
         role: "model",
         text: parsed.cleanedText,
         timestamp: new Date().toISOString(),
-        mode: activeMode,
+        mode: effectiveMode,
+        isStreaming: false,
         hasQuiz: parsed.options.length > 0 && !!parsed.answer,
-        quizOptions: parsed.options,
-        quizAnswer: parsed.answer,
+        ...(parsed.options.length > 0 ? { quizOptions: parsed.options } : {}),
+        ...(parsed.answer ? { quizAnswer: parsed.answer } : {}),
       };
 
-      saveHistory([...updatedHistory, professorMessage]);
+      const finalMessages = [...historyBeforeStream, completedMessage];
+      setMessages(finalMessages);
+      await persistMessages(finalMessages);
+
+      if (autoSpeak || effectiveMode === "voice") {
+        handlePlaySpeech(assistantId, parsed.cleanedText);
+      }
     } catch (err: any) {
-      console.error("Gemini API error:", err);
-      setApiError(err.message || "Failed to communicate with Gemini API. Please check your network.");
-      saveHistory(messages);
+      if (err?.name === "AbortError") {
+        setMessages((prev) => {
+          const updated = prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, text: m.text || "Generation stopped.", isStreaming: false }
+              : m
+          );
+          persistMessages(updated);
+          return updated;
+        });
+      } else {
+        setApiError(err?.message || "Unable to reach Professor Cloud. Please check your connection and try again.");
+        setMessages(historyBeforeStream);
+        await persistMessages(historyBeforeStream);
+      }
     } finally {
+      abortControllerRef.current = null;
       setIsLoading(false);
     }
   };
 
-  // Swarm Agent Summon Shortcut
-  const handleSummonAgent = (agentName: string, role: string) => {
-    const prompt = `@${agentName} (${role}): What is your specialized take and architecture advice for the current AWS exam concept?`;
-    handleSendMessage(prompt, agentName);
-  };
-
-  // Quick Action Preset triggers
-  const triggerPreset = (topic: string) => {
-    let promptText = "";
-    if (topic === "security") {
-      promptText = "Professor, can you explain the differences between Security Groups and Network Access Control Lists (NACLs) using a clear Socratic analogy, and give me a practice concept check?";
-    } else if (topic === "responsibility") {
-      promptText = "Professor, can you break down the AWS Shared Responsibility Model (what AWS is responsible for vs. what the customer is responsible for) with a simple analogy and a practice question?";
-    } else if (topic === "whiteboard_vpc") {
-      setActiveMode("whiteboard");
-      promptText = "Professor, please whiteboard a high-availability 3-tier VPC architecture diagram (ALB, Web Tier, App Tier, Multi-AZ Database) and test me with a failover scenario.";
-    } else if (topic === "s3_tiers") {
-      setActiveMode("distractor");
-      promptText = "Professor, break down the exact differences and cost traps between S3 Standard, S3 Standard-IA, S3 Glacier Flexible Retrieval, and S3 Glacier Deep Archive.";
-    } else if (topic === "serverless") {
-      setActiveMode("whiteboard");
-      promptText = "Professor, whiteboard an event-driven serverless architecture using API Gateway, AWS Lambda, DynamoDB, and Amazon EventBridge.";
-    } else if (topic === "kms") {
-      setActiveMode("distractor");
-      promptText = "Professor, expose the exam traps comparing AWS KMS vs AWS CloudHSM vs AWS Secrets Manager vs AWS Systems Manager Parameter Store.";
-    }
-    handleSendMessage(promptText);
-  };
-
-  // Handle quiz option selection with real-time gamification
   const handleSelectQuizOption = (messageId: string, optionKey: string) => {
-    const updated = messages.map(msg => {
+    const updated = messages.map((msg) => {
       if (msg.id === messageId && msg.quizAnswer) {
         const isCorrect = optionKey.toUpperCase() === msg.quizAnswer.toUpperCase();
-        
+
         if (!msg.userSelectedAnswer) {
           const result = recordProfessorCheckpoint(isCorrect);
           setEarnedXPToast({
             amount: result.xpEarned,
-            message: isCorrect ? "🎯 Correct Socratic Concept Check!" : "💡 Good Practice Attempt!"
+            message: isCorrect ? "Spot-on Socratic Recall!" : "Review Attempt Logged",
           });
-          setTimeout(() => setEarnedXPToast(null), 4000);
+          setTimeout(() => setEarnedXPToast(null), 3500);
 
           if (result.crateDropped) {
             setDroppedCrate(result.crateDropped);
           }
-
-          if (isCorrect && onAddMinutes) {
-            onAddMinutes(2);
+          if (isCorrect) {
+            onAddMinutes?.(2);
           }
         }
 
         return {
           ...msg,
           userSelectedAnswer: optionKey,
-          quizCorrect: isCorrect
+          quizCorrect: isCorrect,
         };
       }
       return msg;
     });
-    saveHistory(updated);
+    setMessages(updated);
+    persistMessages(updated);
   };
 
   const handleOpenDroppedCrate = (crate: LootCrate) => {
@@ -562,94 +781,121 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
     }
   };
 
+  const isZeroState = messages.length <= 1;
+  const lastModelMsg = [...messages].reverse().find((m) => m.role === "model" && !m.isStreaming);
+  const showFollowUpChips = !isLoading && !isZeroState && !!lastModelMsg;
+
   return (
-    <div className="flex flex-col h-[720px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden relative">
-      
-      {/* HEADER BAR */}
-      <div className="bg-slate-900 px-4 py-3 flex flex-wrap items-center justify-between border-b border-slate-800 gap-3">
-        
-        {/* Left: Identity */}
-        <div className="flex items-center gap-2.5">
-          <div className="bg-gradient-to-br from-amber-500 to-[#FF9900] p-2 rounded-md shrink-0 shadow-sm">
-            <GraduationCap className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-black text-white uppercase tracking-wider leading-none">
-                Professor Cloud
-              </h3>
-              <span className="text-[10px] bg-amber-500/20 text-[#FF9900] font-bold px-2 py-0.5 rounded border border-amber-500/30 uppercase font-mono">
-                Socratic AI Mentor
-              </span>
+    <div className="flex flex-col h-[calc(100dvh-165px)] min-h-[540px] max-h-[880px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden relative">
+      {/* TOP BAR */}
+      <header className="bg-slate-950 px-3.5 sm:px-5 py-3 border-b border-slate-800 shrink-0 space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          {/* Brand Identity */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-[#FF9900] flex items-center justify-center shrink-0 shadow-sm">
+              <GraduationCap className="w-5 h-5 text-slate-950" />
             </div>
-            <p className="text-[11px] text-slate-400 mt-1 font-medium flex items-center gap-1.5">
-              <span>AWS Solutions Architect</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-amber-400 font-mono text-[10px]">CLF-C02 Specialist</span>
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-white tracking-tight truncate">
+                  Professor Cloud
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 truncate">
+                Adaptive CLF-C02 Tutor · {learnerTelemetry.overallPct}% Readiness
+              </p>
+            </div>
+          </div>
+
+          {/* Right Controls */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={toggleAutoSpeak}
+              className={`min-h-[36px] px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                autoSpeak
+                  ? "bg-[#FF9900] text-slate-950 border-[#FF9900]"
+                  : "bg-slate-900 text-slate-300 border-slate-800 hover:text-white"
+              }`}
+              title="Automatically narrate Professor responses"
+            >
+              <Headphones className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{autoSpeak ? "Auto-Speak On" : "Auto-Speak"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowAudioStudio((v) => !v)}
+              className={`min-h-[36px] px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer border ${
+                showAudioStudio
+                  ? "bg-slate-800 text-[#FF9900] border-amber-500/40"
+                  : "bg-slate-900 text-slate-300 border-slate-800 hover:text-white"
+              }`}
+              title="Voice & Speed Settings"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Voice</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportChat}
+              className="min-h-[36px] p-2 rounded-lg bg-slate-900 text-slate-300 hover:text-white border border-slate-800 cursor-pointer"
+              title="Export study notes"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetChat}
+              className={`min-h-[36px] px-2 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer border transition-colors ${
+                confirmReset
+                  ? "bg-rose-600 text-white border-rose-500"
+                  : "bg-slate-900 text-slate-300 border-slate-800 hover:text-white"
+              }`}
+              title={confirmReset ? "Tap again to clear chat" : "New session"}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {confirmReset && <span>Confirm</span>}
+            </button>
           </div>
         </div>
 
-        {/* Center: Teaching Mode Tabs */}
-        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-md border border-slate-800">
-          <button
-            onClick={() => setActiveMode("socratic")}
-            className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 ${
-              activeMode === "socratic" 
-                ? "bg-[#FF9900] text-slate-950 shadow-xs" 
-                : "text-slate-400 hover:text-white"
-            }`}
-            title="Socratic Deep Mentorship & Analogies"
-          >
-            <GraduationCap className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Socratic</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveMode("rapid")}
-            className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 ${
-              activeMode === "rapid" 
-                ? "bg-[#FF9900] text-slate-950 shadow-xs" 
-                : "text-slate-400 hover:text-white"
-            }`}
-            title="Rapid High-Yield Exam Sprint"
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Rapid Sprint</span>
-          </button>
-
-          <button
-            onClick={() => setActiveMode("whiteboard")}
-            className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 ${
-              activeMode === "whiteboard" 
-                ? "bg-[#FF9900] text-slate-950 shadow-xs" 
-                : "text-slate-400 hover:text-white"
-            }`}
-            title="Whiteboard Cloud Architecture Topology Diagrams"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Whiteboard</span>
-          </button>
-
-          <button
-            onClick={() => setActiveMode("distractor")}
-            className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 ${
-              activeMode === "distractor" 
-                ? "bg-[#FF9900] text-slate-950 shadow-xs" 
-                : "text-slate-400 hover:text-white"
-            }`}
-            title="Expose & Bust Sneaky Exam Traps"
-          >
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Trap Buster</span>
-          </button>
+        {/* Segmented Horizontal Mode Picker */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+          {(Object.keys(MODE_META) as TeachingMode[]).map((modeKey) => {
+            const meta = MODE_META[modeKey];
+            const active = activeMode === modeKey;
+            return (
+              <button
+                key={modeKey}
+                type="button"
+                onClick={() => setActiveMode(modeKey)}
+                className={`shrink-0 min-h-[34px] px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#FF9900] text-slate-950 shadow-xs"
+                    : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800/80"
+                }`}
+              >
+                {meta.icon}
+                <span className="sm:hidden">{meta.shortLabel}</span>
+                <span className="hidden sm:inline">{meta.label}</span>
+              </button>
+            );
+          })}
         </div>
+      </header>
 
-        {/* Right: Audio & Controls */}
-        <div className="flex items-center gap-2">
-          {/* ElevenLabs Voice Selection */}
-          <div className="hidden md:flex items-center gap-1.5 bg-slate-800 border border-slate-700/60 rounded px-2 py-1 text-[10px] text-slate-300">
-            <Volume2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+      {/* COLLAPSIBLE VOICE STUDIO DRAWER (Accessible on Mobile & Desktop) */}
+      {showAudioStudio && (
+        <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 text-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <Volume2 className="w-4 h-4 text-[#FF9900] shrink-0" />
             <select
               value={selectedVoiceId}
               onChange={(e) => {
@@ -657,150 +903,171 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
                 setSelectedVoiceId(val);
                 localStorage.setItem("aws_professor_voice_id", val);
               }}
-              className="bg-transparent border-none text-[10px] font-bold font-mono focus:outline-none text-slate-200 cursor-pointer pr-1"
+              className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-100 focus:outline-none focus:border-[#FF9900]"
             >
               {ELEVENLABS_VOICES.map((v) => (
-                <option key={v.id} value={v.id} className="bg-slate-900 text-slate-100 font-sans font-semibold">
-                  {v.name} ({v.label})
+                <option key={v.id} value={v.id}>
+                  {v.name} — {v.label}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Speed Pills */}
-          <div className="hidden lg:flex items-center gap-1 bg-slate-800 border border-slate-700/60 rounded px-1.5 py-1 text-[10px]">
-            {[0.8, 1.0, 1.25, 1.5].map((rate) => (
-              <button
-                key={rate}
-                onClick={() => updateAudioRate(rate)}
-                className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold cursor-pointer ${
-                  speechRate === rate 
-                    ? "bg-[#FF9900] text-slate-950" 
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                {rate}x
-              </button>
-            ))}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1">
+              {[0.85, 1.0, 1.25, 1.5].map((rate) => (
+                <button
+                  key={rate}
+                  type="button"
+                  onClick={() => updateAudioRate(rate)}
+                  className={`px-2 py-1 rounded text-[11px] font-mono font-bold cursor-pointer ${
+                    speechRate === rate ? "bg-[#FF9900] text-slate-950" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {rate}x
+                </button>
+              ))}
+            </div>
+
+            <label className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
+              <span>Vol</span>
+              <input
+                type="range"
+                min={0.2}
+                max={1}
+                step={0.1}
+                value={speechVolume}
+                onChange={(e) => updateAudioVolume(Number(e.target.value))}
+                className="w-20 accent-[#FF9900] cursor-pointer"
+              />
+            </label>
           </div>
+        </div>
+      )}
 
-          <button
-            onClick={handleExportChat}
-            className="text-slate-400 hover:text-[#FF9900] text-[10px] font-bold font-mono transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
-            title="Export Notes"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Save</span>
-          </button>
+      {/* COMPACT ADAPTIVE TELEMETRY BAR */}
+      <div className="bg-slate-50 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 px-3.5 sm:px-5 py-2 flex items-center justify-between gap-2 text-[11px] shrink-0">
+        <button
+          type="button"
+          onClick={() =>
+            handleSendMessage(
+              `Drill me on my weakest AWS CLF-C02 domain right now: ${learnerTelemetry.weakestDomain.name}. Give me a concise mastery lesson and a tough checkpoint question.`,
+              "Archie"
+            )
+          }
+          disabled={isLoading}
+          className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 hover:text-[#FF9900] font-semibold truncate cursor-pointer disabled:opacity-50"
+          title="Tap to drill your weakest domain"
+        >
+          <Target className="w-3.5 h-3.5 text-[#FF9900] shrink-0" />
+          <span className="truncate">
+            Focus: <strong className="font-bold">{learnerTelemetry.weakestDomain.name}</strong> ({learnerTelemetry.weakestDomain.pct}%)
+          </span>
+          <ArrowUpRight className="w-3 h-3 text-slate-400 shrink-0" />
+        </button>
 
-          <button
-            onClick={handleResetChat}
-            className="text-slate-400 hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors cursor-pointer"
-            title="Reset Chat Session"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+        <div className="flex items-center gap-3 shrink-0 font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400">
+          {sessionStats.answered > 0 && (
+            <span className="text-emerald-600 dark:text-emerald-400">
+              {sessionStats.correct}/{sessionStats.answered} Checkpoints
+            </span>
+          )}
+          <span className="hidden sm:inline">{MODE_META[activeMode].description}</span>
         </div>
       </div>
 
-      {/* Floating XP Notification Toast */}
+      {/* Floating XP Toast */}
       {earnedXPToast && (
-        <div className="absolute top-16 right-4 z-50 bg-slate-900 border border-[#FF9900] text-white px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-3 animate-bounce">
-          <div className="p-1.5 bg-[#FF9900] text-slate-950 rounded-full font-black">
-            <Zap className="w-4 h-4" />
+        <div className="absolute top-28 right-4 z-40 bg-slate-900 border border-[#FF9900] text-white px-3.5 py-2 rounded-xl shadow-xl flex items-center gap-2.5 animate-fade-in">
+          <div className="p-1 bg-[#FF9900] text-slate-950 rounded-full">
+            <Zap className="w-3.5 h-3.5" />
           </div>
           <div>
-            <div className="text-xs font-black text-amber-400">+{earnedXPToast.amount} Exam XP!</div>
+            <div className="text-xs font-black text-amber-400">+{earnedXPToast.amount} XP</div>
             <div className="text-[10px] text-slate-300">{earnedXPToast.message}</div>
           </div>
         </div>
       )}
 
-      {/* Floating Mystery Loot Crate Drop Alert */}
+      {/* Mystery Crate Alert */}
       {droppedCrate && (
-        <div className="bg-gradient-to-r from-pink-900/90 via-purple-900/90 to-indigo-900/90 border-b border-pink-500/40 px-4 py-3 text-white flex items-center justify-between gap-3 animate-pulse">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-pink-500 text-white rounded-lg shadow-md">
-              <Gift className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xs font-black uppercase tracking-wider text-pink-300">
-                🎁 Mystery Loot Crate Discovered!
-              </div>
-              <div className="text-xs text-slate-200">
-                {droppedCrate.title} ({droppedCrate.rarity.toUpperCase()})
-              </div>
-            </div>
+        <div className="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-950 border-b border-purple-500/40 px-4 py-2.5 text-white flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Gift className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-xs font-bold truncate">
+              Mystery Loot Crate: {droppedCrate.title}
+            </span>
           </div>
           <button
+            type="button"
             onClick={() => handleOpenDroppedCrate(droppedCrate)}
-            className="px-4 py-2 bg-gradient-to-r from-pink-500 to-[#FF9900] text-slate-950 font-black text-xs rounded-md shadow-lg hover:scale-105 transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-[#FF9900] text-slate-950 font-black text-xs rounded-lg shrink-0 cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            Open Crate Now
+            Open Crate
           </button>
         </div>
       )}
 
-      {/* Opened Crate Reward Modal */}
+      {/* Opened Crate Modal */}
       {openedCrateReward && (
-        <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-amber-500/50 p-6 rounded-xl max-w-md w-full text-center space-y-4 shadow-2xl text-white relative">
-            <button 
+        <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-500/40 p-5 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl text-white relative">
+            <button
+              type="button"
               onClick={() => setOpenedCrateReward(null)}
               className="absolute top-3 right-3 text-slate-400 hover:text-white p-1"
             >
               <X className="w-4 h-4" />
             </button>
-            <div className="w-16 h-16 bg-amber-500/20 text-[#FF9900] rounded-2xl flex items-center justify-center mx-auto border border-amber-500/30">
-              <Trophy className="w-8 h-8 animate-bounce" />
+            <div className="w-12 h-12 bg-amber-500/20 text-[#FF9900] rounded-xl flex items-center justify-center mx-auto">
+              <Trophy className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-black uppercase tracking-wide text-[#FF9900]">
-              Loot Unlocked!
-            </h3>
+            <h3 className="text-base font-black text-[#FF9900]">Loot Unlocked</h3>
             {openedCrateReward.rewards.map((r, i) => (
-              <div key={i} className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-left space-y-1">
+              <div key={i} className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-left space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-white flex items-center gap-1.5">
-                    <span>{r.icon}</span>
-                    {r.name}
+                  <span className="text-xs font-bold text-white">
+                    {r.icon} {r.name}
                   </span>
-                  <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">
+                  <span className="text-[10px] font-mono uppercase text-amber-400 font-bold">
                     {r.rarity}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">{r.description}</p>
+                <p className="text-[11px] text-slate-400">{r.description}</p>
               </div>
             ))}
             <button
+              type="button"
               onClick={() => setOpenedCrateReward(null)}
-              className="w-full py-2.5 bg-[#FF9900] text-slate-950 font-black text-xs rounded-md shadow hover:bg-amber-500 transition-colors cursor-pointer"
+              className="w-full py-2.5 bg-[#FF9900] text-slate-950 font-black text-xs rounded-xl cursor-pointer"
             >
-              Claim to Inventory
+              Collect Reward
             </button>
           </div>
         </div>
       )}
 
-      {/* Resume Active Session Banner */}
+      {/* Resume Active Cloud Session Banner */}
       {activeSessionDoc && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between gap-3 animate-fade-in text-slate-200">
-          <div className="flex items-center gap-2">
-            <Play className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
-            <p className="text-xs text-slate-300">
-              Active Socratic chat found ({activeSessionDoc.messages?.length || 0} msgs).
+        <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 py-2 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Play className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
+            <p className="text-xs text-slate-700 dark:text-slate-200 truncate">
+              Resume previous session ({activeSessionDoc.messages?.length || 0} messages)
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
+              type="button"
               onClick={handleDismissActiveSocraticSession}
-              className="text-xs text-slate-400 hover:text-white px-2 py-1 font-bold cursor-pointer"
+              className="text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white font-bold px-2 py-1 cursor-pointer"
             >
               Dismiss
             </button>
             <button
+              type="button"
               onClick={handleResumeActiveSocraticSession}
-              className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded shadow-xs cursor-pointer"
+              className="px-3 py-1 bg-[#FF9900] text-slate-950 font-black text-xs rounded-lg cursor-pointer"
             >
               Resume
             </button>
@@ -808,97 +1075,90 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
         </div>
       )}
 
-      {/* CHAT BUBBLES CONSOLE */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950">
-        
-        {/* Sync Status Pill */}
-        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 px-2">
-          <div className="flex items-center gap-1.5 font-bold font-mono">
-            <span className={`w-2 h-2 rounded-full ${user ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-            {user ? "Cloud Synced Storage Active" : "Local Sandbox Mode"}
-          </div>
-          <div className="flex items-center gap-2 font-mono">
-            <span>Mode: <strong className="text-[#FF9900] uppercase">{activeMode}</strong></span>
-          </div>
-        </div>
-        
+      {/* CONVERSATION STREAM */}
+      <div className="flex-1 overflow-y-auto px-3.5 sm:px-5 py-4 space-y-5 bg-slate-50/70 dark:bg-slate-950 touch-scroll">
         {messages.map((msg) => (
-          <div 
-            key={msg.id} 
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
+          <div
+            key={msg.id}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
-            <div className={`max-w-[88%] flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-              
-              {/* Avatar Icons */}
-              <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 border ${
-                msg.role === "user" 
-                  ? "bg-slate-900 dark:bg-slate-800 border-slate-700 text-white shadow-xs" 
-                  : "bg-[#FF9900]/10 border-[#FF9900]/30 text-[#FF9900]"
-              }`}>
+            <div
+              className={`max-w-[92%] sm:max-w-[82%] flex gap-2.5 ${
+                msg.role === "user" ? "flex-row-reverse" : "flex-row"
+              }`}
+            >
+              {/* Compact Avatar */}
+              <div
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                  msg.role === "user"
+                    ? "bg-slate-900 dark:bg-slate-800 text-white"
+                    : "bg-[#FF9900]/15 text-[#FF9900] border border-[#FF9900]/30"
+                }`}
+              >
                 {msg.role === "user" ? (
-                  <span className="text-[10px] font-black font-mono">YOU</span>
+                  <span className="text-[9px] font-black">YOU</span>
                 ) : (
-                  <Bot className="w-4 h-4 text-[#FF9900]" />
+                  <Bot className="w-4 h-4" />
                 )}
               </div>
 
-              {/* Bubble Content */}
-              <div className="space-y-3 relative group w-full">
-                <div className={`p-4 rounded-lg shadow-xs border text-xs leading-relaxed overflow-hidden ${
-                  msg.role === "user"
-                    ? "bg-slate-900 dark:bg-slate-800 border-slate-700 text-white rounded-tr-none"
-                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none prose prose-sm prose-slate dark:prose-invert max-w-none"
-                }`}>
+              <div className="space-y-2.5 min-w-0 flex-1">
+                <div
+                  className={`px-4 py-3 rounded-2xl text-[13px] leading-relaxed overflow-x-auto ${
+                    msg.role === "user"
+                      ? "bg-slate-900 dark:bg-slate-800 text-white rounded-tr-xs"
+                      : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-xs shadow-2xs prose prose-sm prose-slate dark:prose-invert max-w-none"
+                  }`}
+                >
                   {msg.role === "user" ? (
                     <span className="whitespace-pre-wrap font-medium">{msg.text}</span>
+                  ) : msg.isStreaming && !msg.text ? (
+                    <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-medium py-0.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF9900]" />
+                      <span>Professor Cloud is thinking...</span>
+                    </div>
                   ) : (
                     <div className="markdown-body">
                       <Markdown>{msg.text}</Markdown>
+                      {msg.isStreaming && (
+                        <span className="inline-block w-1.5 h-3.5 ml-1 bg-[#FF9900] animate-pulse align-middle rounded-xs" />
+                      )}
                     </div>
                   )}
                 </div>
 
-                {/* Message Audio / Copy Toolbar */}
-                {msg.role === "model" && (
-                  <div className="flex items-center gap-2 pt-0.5">
+                {/* Audio + Copy Action Bar */}
+                {msg.role === "model" && !msg.isStreaming && msg.text && (
+                  <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => handlePlaySpeech(msg.id, msg.text)}
-                      className={`text-[11px] font-bold px-2 py-1 rounded transition-colors flex items-center gap-1.5 cursor-pointer border ${
-                        playingMessageId === msg.id 
-                          ? "bg-amber-500 text-slate-950 border-amber-500 shadow-sm animate-pulse" 
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-[#FF9900]"
-                      }`}
-                      title={playingMessageId === msg.id ? "Stop Narration" : "Listen with Professor Voice"}
                       disabled={loadingMessageId === msg.id}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer border transition-colors ${
+                        playingMessageId === msg.id
+                          ? "bg-[#FF9900] text-slate-950 border-[#FF9900]"
+                          : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-[#FF9900]/50"
+                      }`}
                     >
                       {loadingMessageId === msg.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF9900]" />
+                        <Loader2 className="w-3 h-3 animate-spin text-[#FF9900]" />
                       ) : playingMessageId === msg.id ? (
-                        <VolumeX className="w-3.5 h-3.5 text-slate-950" />
+                        <VolumeX className="w-3 h-3" />
                       ) : (
-                        <Volume2 className="w-3.5 h-3.5" />
+                        <Volume2 className="w-3 h-3" />
                       )}
-                      <span>{playingMessageId === msg.id ? "Listening..." : "Listen"}</span>
-
-                      {/* Visual Soundwave Animation */}
-                      {playingMessageId === msg.id && (
-                        <span className="flex items-center gap-0.5 ml-1">
-                          <span className="w-0.5 h-2.5 bg-slate-950 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <span className="w-0.5 h-3.5 bg-slate-950 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <span className="w-0.5 h-2 bg-slate-950 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                        </span>
-                      )}
+                      <span>{playingMessageId === msg.id ? "Stop" : "Listen"}</span>
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => handleCopyMessage(msg.id, msg.text)}
-                      className="text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
-                      title="Copy message text"
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 cursor-pointer"
                     >
                       {copiedMsgId === msg.id ? (
                         <>
                           <Check className="w-3 h-3 text-emerald-500" />
-                          <span className="text-emerald-500 font-bold">Copied</span>
+                          <span className="text-emerald-500">Copied</span>
                         </>
                       ) : (
                         <>
@@ -910,20 +1170,16 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
                   </div>
                 )}
 
-                {/* PARSED SOCRATIC CHECKPOINT QUIZ */}
-                {msg.role === "model" && msg.hasQuiz && msg.quizOptions && msg.quizOptions.length > 0 && (
-                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg shadow-md space-y-3">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-[#FF9900] tracking-wider uppercase font-mono">
-                      <span className="flex items-center gap-1.5">
-                        <Flame className="w-4 h-4 text-amber-500 fill-amber-500/20 animate-pulse" />
-                        Socratic Active Checkpoint
+                {/* INTERACTIVE CHECKPOINT QUIZ */}
+                {msg.role === "model" && !msg.isStreaming && msg.hasQuiz && msg.quizOptions && msg.quizOptions.length > 0 && (
+                  <div className="bg-slate-900 border border-slate-800 p-3.5 sm:p-4 rounded-xl space-y-2.5">
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider font-mono">
+                      <span className="flex items-center gap-1.5 text-[#FF9900]">
+                        <Flame className="w-3.5 h-3.5" />
+                        Active Recall Check
                       </span>
-                      <span className="text-emerald-400 font-mono">+50 XP & Loot Drop</span>
+                      <span className="text-emerald-400">+50 XP</span>
                     </div>
-                    
-                    <p className="text-xs text-slate-300 font-medium">
-                      Select the correct answer to test your retention and earn mastery XP:
-                    </p>
 
                     <div className="grid grid-cols-1 gap-2">
                       {msg.quizOptions.map((opt, optIdx) => {
@@ -931,103 +1187,154 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
                         const isAnswerCorrect = opt.key === msg.quizAnswer;
                         const showResult = !!msg.userSelectedAnswer;
 
-                        let buttonStyle = "bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white";
+                        let buttonStyle =
+                          "bg-slate-950 border-slate-800 text-slate-200 hover:border-[#FF9900]/60";
                         if (showResult) {
                           if (isAnswerCorrect) {
-                            buttonStyle = "bg-emerald-950/90 border-emerald-500 text-emerald-300 font-bold";
+                            buttonStyle = "bg-emerald-950/90 border-emerald-500 text-emerald-200 font-bold";
                           } else if (isSelected) {
-                            buttonStyle = "bg-rose-950/90 border-rose-500 text-rose-300 font-bold";
+                            buttonStyle = "bg-rose-950/90 border-rose-500 text-rose-200 font-bold";
                           } else {
-                            buttonStyle = "bg-slate-950/40 border-slate-900 text-slate-600 opacity-40";
+                            buttonStyle = "bg-slate-950/40 border-slate-900 text-slate-500 opacity-50";
                           }
                         }
 
                         return (
                           <button
                             key={`${msg.id}-${opt.key}-${optIdx}`}
+                            type="button"
                             disabled={showResult}
                             onClick={() => handleSelectQuizOption(msg.id, opt.key)}
-                            className={`w-full text-left p-3 rounded-md border text-xs font-semibold transition-all flex items-start gap-3 ${buttonStyle} ${!showResult && "cursor-pointer hover:translate-x-1"}`}
+                            className={`w-full min-h-[44px] text-left px-3 py-2.5 rounded-lg border text-xs font-medium transition-all flex items-center gap-2.5 ${buttonStyle} ${
+                              !showResult && "cursor-pointer"
+                            }`}
                           >
-                            <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0 border ${
-                              showResult && isAnswerCorrect 
-                                ? "bg-emerald-500/20 border-emerald-500 text-emerald-400" 
-                                : showResult && isSelected 
-                                ? "bg-rose-500/20 border-rose-500 text-rose-400" 
-                                : "bg-slate-800 border-slate-700 text-slate-400"
-                            }`}>
+                            <span className="w-6 h-6 rounded-md text-[11px] font-bold flex items-center justify-center shrink-0 bg-slate-800 border border-slate-700 text-slate-300">
                               {opt.key}
                             </span>
-                            <span className="leading-snug pt-0.5">{opt.text}</span>
+                            <span className="leading-snug">{opt.text}</span>
                           </button>
                         );
                       })}
                     </div>
 
-                    {/* Quiz result feedback */}
                     {msg.userSelectedAnswer && (
-                      <div className={`p-3 rounded-md text-xs flex items-start gap-2.5 animate-fade-in ${
-                        msg.quizCorrect 
-                          ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" 
-                          : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
-                      }`}>
-                        {msg.quizCorrect ? (
-                          <>
-                            <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                            <div className="space-y-0.5">
-                              <p className="font-black text-xs text-emerald-300">Spot on! Excellent retention.</p>
-                              <p className="text-[11px] text-emerald-400/90 leading-relaxed">
-                                You identified the core architectural requirement. Socratic active recall cemented! Awarded <strong className="text-white">+50 XP</strong>.
-                              </p>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-                            <div className="space-y-0.5">
-                              <p className="font-black text-xs text-rose-300">Watch out for distractors!</p>
-                              <p className="text-[11px] text-rose-400/90 leading-relaxed">
-                                The correct answer was <span className="font-mono font-bold bg-rose-500/20 px-1 py-0.5 rounded">{msg.quizAnswer}</span>. Review the professor's explanation above to memorize this distinction.
-                              </p>
-                            </div>
-                          </>
-                        )}
+                      <div
+                        className={`p-3 rounded-lg text-xs flex items-center justify-between gap-2 ${
+                          msg.quizCorrect
+                            ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+                            : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {msg.quizCorrect ? (
+                            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                          )}
+                          <span className="font-semibold">
+                            {msg.quizCorrect
+                              ? "Correct! +50 XP earned."
+                              : `Answer is ${msg.quizAnswer}.`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleSendMessage(
+                              `Explain concisely why ${msg.quizAnswer} is right and why the other options are AWS CLF-C02 distractors.`
+                            )
+                          }
+                          disabled={isLoading}
+                          className="text-[11px] font-black underline hover:text-white shrink-0 cursor-pointer"
+                        >
+                          Why?
+                        </button>
                       </div>
                     )}
                   </div>
                 )}
-
               </div>
             </div>
           </div>
         ))}
 
-        {isLoading && (
-          <div className="flex justify-start animate-fade-in">
-            <div className="flex gap-3 max-w-[80%]">
-              <div className="w-8 h-8 rounded-md flex items-center justify-center bg-[#FF9900]/10 border border-[#FF9900]/30 text-[#FF9900] shrink-0">
-                <Bot className="w-4 h-4 text-[#FF9900] animate-pulse" />
+        {/* ZERO-STATE STUDY STARTERS & SWARM GALLERY */}
+        {(isZeroState || showStarterDrawer) && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-4 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Compass className="w-4 h-4 text-[#FF9900]" />
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                  High-Yield Study Starters
+                </h4>
               </div>
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 p-3.5 rounded-lg text-xs rounded-tl-none flex items-center gap-2 shadow-xs">
-                <span className="font-bold">Professor Cloud is reasoning...</span>
-                <div className="flex gap-1">
-                  <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1.5 h-1.5 bg-[#FF9900] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
+              {showStarterDrawer && (
+                <button
+                  type="button"
+                  onClick={() => setShowStarterDrawer(false)}
+                  className="text-xs text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+                >
+                  Hide
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {QUICK_STARTERS.map((starter) => (
+                <button
+                  key={starter.id}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => handleSendMessage(starter.prompt, undefined, starter.mode)}
+                  className="text-left p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 hover:border-[#FF9900] transition-all cursor-pointer group"
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF9900] font-mono">
+                    {starter.tag}
+                  </span>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white mt-0.5 group-hover:text-[#FF9900] transition-colors">
+                    {starter.title}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {starter.subtitle}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-2 flex items-center gap-1.5">
+                <Cpu className="w-3 h-3 text-[#FF9900]" />
+                Co-Teach with Specialist Agents
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {SWARM_SPECIALISTS.map((agent) => (
+                  <button
+                    key={agent.name}
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() =>
+                      handleSendMessage(
+                        `@${agent.name} (${agent.role}): Give me your #1 AWS CLF-C02 exam rule in ${agent.badge} and test me on it.`,
+                        agent.name
+                      )
+                    }
+                    className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-[#FF9900] hover:text-slate-950 transition-colors cursor-pointer"
+                  >
+                    @{agent.name} · {agent.badge}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
         )}
 
         {apiError && (
-          <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 p-4 rounded-lg text-xs space-y-1 max-w-xl mx-auto flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+          <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 p-3.5 rounded-xl text-xs flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-bold uppercase tracking-wider text-rose-900 dark:text-rose-100">
-                API Response Delayed
-              </h4>
-              <p className="leading-relaxed font-medium text-rose-700 dark:text-rose-300">{apiError}</p>
+              <div className="font-bold">Connection Notice</div>
+              <p className="text-rose-700 dark:text-rose-300 mt-0.5">{apiError}</p>
             </div>
           </div>
         )}
@@ -1035,121 +1342,97 @@ export const InteractiveProfessor: React.FC<InteractiveProfessorProps> = ({ user
         <div ref={messagesEndRef} />
       </div>
 
-      {/* SWARM AGENT SUMMON BAR & PRESETS */}
-      <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4 space-y-3">
-        
-        {/* Agent Swarm Summon Buttons */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[9px] uppercase font-bold text-slate-400 font-mono tracking-wider flex items-center gap-1 mr-1">
-            <Cpu className="w-3 h-3 text-[#FF9900]" />
-            Summon Agent:
-          </span>
-          <button
-            onClick={() => handleSummonAgent("Archie", "Lead Solutions Architect")}
-            disabled={isLoading}
-            className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
-          >
-            🏗️ @Archie (Architect)
-          </button>
-          <button
-            onClick={() => handleSummonAgent("Guardian", "SecOps & Compliance")}
-            disabled={isLoading}
-            className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
-          >
-            🛡️ @Guardian (SecOps)
-          </button>
-          <button
-            onClick={() => handleSummonAgent("PennyWise", "FinOps & Cost")}
-            disabled={isLoading}
-            className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
-          >
-            💰 @PennyWise (FinOps)
-          </button>
-          <button
-            onClick={() => handleSummonAgent("TrapMaster", "Exam Distractors")}
-            disabled={isLoading}
-            className="px-2 py-0.5 text-[10px] font-bold rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-all cursor-pointer disabled:opacity-50"
-          >
-            ⚡ @TrapMaster (Traps)
-          </button>
-        </div>
+      {/* SMART COMPOSER + FOLLOW-UP BAR */}
+      <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-3.5 sm:px-5 py-3 space-y-2.5 shrink-0">
+        {showFollowUpChips && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setShowStarterDrawer((v) => !v)}
+              className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center gap-1 cursor-pointer"
+            >
+              <Sparkles className="w-3 h-3 text-[#FF9900]" />
+              <span>Topics</span>
+              {showStarterDrawer ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+            </button>
 
-        {/* Quick Topics Shortcuts */}
-        <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
-          <button
-            onClick={() => triggerPreset("security")}
-            disabled={isLoading}
-            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
-          >
-            🛡️ Security Groups vs NACLs
-          </button>
-          <button
-            onClick={() => triggerPreset("responsibility")}
-            disabled={isLoading}
-            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
-          >
-            ⚖️ Shared Responsibility
-          </button>
-          <button
-            onClick={() => triggerPreset("whiteboard_vpc")}
-            disabled={isLoading}
-            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
-          >
-            📐 Draw 3-Tier VPC Topology
-          </button>
-          <button
-            onClick={() => triggerPreset("s3_tiers")}
-            disabled={isLoading}
-            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
-          >
-            📦 S3 Storage Class Cost Traps
-          </button>
-          <button
-            onClick={() => triggerPreset("serverless")}
-            disabled={isLoading}
-            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
-          >
-            ⚡ Serverless Event Architecture
-          </button>
-          <button
-            onClick={() => triggerPreset("kms")}
-            disabled={isLoading}
-            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded transition-all cursor-pointer disabled:opacity-50"
-          >
-            🔒 KMS vs CloudHSM vs Secrets Manager
-          </button>
-        </div>
+            {[
+              { label: "Explain simpler", prompt: "Explain that concept in simpler everyday terms with a quick analogy." },
+              { label: "Harder question", prompt: "Give me a harder CLF-C02 scenario question on this exact topic." },
+              { label: "Exam traps", prompt: "What sneaky distractor keywords does AWS use on the exam for this topic?" },
+            ].map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => handleSendMessage(chip.prompt)}
+                className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-[#FF9900] transition-colors cursor-pointer"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* Input Box */}
-        <form 
+        <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSendMessage(inputText);
           }}
-          className="flex gap-2"
+          className="flex items-center gap-2"
         >
+          {micSupported && (
+            <button
+              type="button"
+              onClick={toggleMicInput}
+              disabled={isLoading}
+              className={`min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 ${
+                isListeningMic
+                  ? "bg-rose-500 text-white border-rose-500 animate-pulse"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-[#FF9900]"
+              }`}
+              title={isListeningMic ? "Stop listening" : "Speak question hands-free"}
+            >
+              {isListeningMic ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+          )}
+
           <input
             id="professor-chat-input"
             type="text"
             disabled={isLoading}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder={`Ask Professor Cloud (${activeMode.toUpperCase()} mode)...`}
-            className="flex-1 px-3.5 py-2.5 border border-slate-200 dark:border-slate-700 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-[#FF9900] bg-slate-50 dark:bg-slate-950 focus:bg-white dark:focus:bg-slate-900 transition-colors text-slate-900 dark:text-slate-100 disabled:opacity-60 font-medium"
+            placeholder={
+              isListeningMic
+                ? "Listening... speak your AWS question"
+                : `Ask Professor Cloud (${MODE_META[activeMode].shortLabel})...`
+            }
+            className="flex-1 min-h-[44px] px-3.5 py-2 border border-slate-200 dark:border-slate-700 text-sm sm:text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FF9900] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 disabled:opacity-60 font-medium"
           />
-          <button
-            type="submit"
-            id="professor-chat-submit-btn"
-            disabled={!inputText.trim() || isLoading}
-            className="bg-[#FF9900] hover:bg-amber-500 text-slate-950 px-4 py-2.5 text-xs font-black uppercase tracking-wider rounded-md shrink-0 flex items-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer shadow-sm min-h-[44px]"
-          >
-            <span>Ask</span>
-            <Send className="w-3.5 h-3.5" />
-          </button>
+
+          {isLoading ? (
+            <button
+              type="button"
+              onClick={handleStopStreaming}
+              className="min-h-[44px] px-3.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black rounded-xl shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Stop streaming"
+            >
+              <Square className="w-3.5 h-3.5 fill-current" />
+              <span className="hidden sm:inline">Stop</span>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              id="professor-chat-submit-btn"
+              disabled={!inputText.trim()}
+              className="min-h-[44px] px-4 bg-[#FF9900] hover:bg-amber-500 text-slate-950 text-xs font-black rounded-xl shrink-0 flex items-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer shadow-xs"
+            >
+              <span className="hidden sm:inline">Send</span>
+              <Send className="w-4 h-4" />
+            </button>
+          )}
         </form>
-
       </div>
-
     </div>
   );
 };

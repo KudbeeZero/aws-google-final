@@ -20,10 +20,11 @@ import {
   Copy,
   ChevronDown,
   ChevronUp,
-  Filter
+  Filter,
+  Headphones
 } from "lucide-react";
 import { DistractorItem } from "../types";
-import { synthesizeFallbackSpeechAudio } from "../services/audioCacheService";
+import { useAudioLesson } from "../contexts/AudioLessonContext";
 
 interface TheDistractorVaultProps {
   vaultItems: DistractorItem[];
@@ -47,8 +48,11 @@ export const TheDistractorVault: React.FC<TheDistractorVaultProps> = ({
   const [activeQuizTrapId, setActiveQuizTrapId] = useState<string | null>(null);
   const [quizSelectedOption, setQuizSelectedOption] = useState<"A" | "B" | null>(null);
   const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
-  const [activeSpeakingId, setActiveSpeakingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { playLesson, playQueue, currentLesson, isPlaying: isGlobalPlaying } = useAudioLesson();
+  const activeSpeakingId = isGlobalPlaying && currentLesson?.id.startsWith("trap-")
+    ? currentLesson.id.replace("trap-", "")
+    : null;
 
   // Sync state upward when user modifies bookmarks/filters
   const persistState = useCallback((updates: Partial<any>) => {
@@ -82,23 +86,19 @@ export const TheDistractorVault: React.FC<TheDistractorVaultProps> = ({
     });
   };
 
-  // Audio narration handler
+  // Persistent Audio narration handler
   const handleNarrate = (item: DistractorItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (activeSpeakingId === item.id) {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-      setActiveSpeakingId(null);
-      return;
-    }
-
-    setActiveSpeakingId(item.id);
     const narrationText = `AWS Exam Distractor Trap. Comparing ${item.serviceA} versus ${item.serviceB}. ${item.serviceA}: ${item.serviceAUsage}. ${item.serviceB}: ${item.serviceBUsage}. Exam trap warning: ${item.keyTrap}`;
-    synthesizeFallbackSpeechAudio(narrationText);
-
-    // Reset speaking status after timeout
-    setTimeout(() => {
-      setActiveSpeakingId((current) => (current === item.id ? null : current));
-    }, 15000);
+    playLesson(
+      {
+        id: `trap-${item.id}`,
+        title: `${item.serviceA} vs ${item.serviceB}`,
+        module: "Distractor Vault",
+        text: narrationText,
+      },
+      { toggleIfSame: true }
+    );
   };
 
   const handleCopyTrap = (item: DistractorItem, e: React.MouseEvent) => {
@@ -271,6 +271,25 @@ export const TheDistractorVault: React.FC<TheDistractorVaultProps> = ({
             >
               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
               Mastered ({masteredIds.length})
+            </button>
+
+            <button
+              onClick={() => {
+                if (filteredItems.length === 0) return;
+                playQueue(
+                  filteredItems.map((item) => ({
+                    id: `trap-${item.id}`,
+                    title: `${item.serviceA} vs ${item.serviceB}`,
+                    module: "Distractor Vault",
+                    text: `AWS Exam Distractor Trap. Comparing ${item.serviceA} versus ${item.serviceB}. ${item.serviceA}: ${item.serviceAUsage}. ${item.serviceB}: ${item.serviceBUsage}. Exam trap warning: ${item.keyTrap}`,
+                  }))
+                );
+              }}
+              className="px-3 py-1 text-[11px] font-bold rounded-sm transition-all cursor-pointer flex items-center gap-1 bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 hover:opacity-90"
+              title="Listen to all filtered traps continuously"
+            >
+              <Headphones className="w-3 h-3" />
+              Listen All
             </button>
           </div>
         </div>
